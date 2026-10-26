@@ -38,9 +38,10 @@ supplied when the IF_curve object is created.
 
 """
 
-import numpy
-import nest
 import shelve
+
+import nest
+import numpy
 
 ###############################################################################
 # Here we define which model and the neuron parameters to use for measuring
@@ -124,7 +125,7 @@ class IF_curve:
         self.i_range = numpy.arange(*i_mean)
         self.std_range = numpy.arange(*i_std)
         self.rate = numpy.zeros((self.i_range.size, self.std_range.size))
-        nest.set_verbosity("M_WARNING")
+        nest.verbosity = nest.VerbosityLevel.WARNING
         for n, i in enumerate(self.i_range):
             print("I  =  {0}".format(i))
             for m, std in enumerate(self.std_range):

@@ -29,14 +29,14 @@
 #include <iterator>
 #include <vector>
 
-#include "sliexceptions.h"
+#include "exceptions.h"
 
 template < typename value_type_ >
 class BlockVector;
 template < typename value_type_, typename ref_, typename ptr_ >
 class bv_iterator;
 
-constexpr int block_size_shift = 10; //!< max_block_size = 2^block_size_shift
+constexpr int block_size_shift = 10;  //!< max_block_size = 2^block_size_shift
 constexpr int max_block_size = 1L << block_size_shift;
 constexpr int max_block_size_sub_1 = max_block_size - 1;
 
@@ -237,6 +237,14 @@ public:
   void push_back( const value_type_& value );
 
   /**
+   * @brief Move data to the end of the BlockVector.
+   * @param value Data to be moved to end of BlockVector.
+   *
+   * Moves given data to the element at the end of the BlockVector.
+   */
+  void push_back( value_type_&& value );
+
+  /**
    * Erases all the elements.
    */
   void clear();
@@ -305,7 +313,7 @@ public:
 private:
   //! Vector holding blocks containing data.
   std::vector< std::vector< value_type_ > > blockmap_;
-  iterator finish_; //!< Iterator pointing to one past the last element.
+  iterator finish_;  //!< Iterator pointing to one past the last element.
 };
 
 /////////////////////////////////////////////////////////////
@@ -313,15 +321,17 @@ private:
 /////////////////////////////////////////////////////////////
 
 template < typename value_type_ >
-inline BlockVector< value_type_ >::BlockVector()
-  : blockmap_( std::vector< std::vector< value_type_ > >( 1, std::vector< value_type_ >( max_block_size ) ) )
+BlockVector< value_type_ >::BlockVector()
+  : blockmap_(
+      std::vector< std::vector< value_type_ > >( 1, std::move( std::vector< value_type_ >( max_block_size ) ) ) )
   , finish_( begin() )
 {
 }
 
 template < typename value_type_ >
-inline BlockVector< value_type_ >::BlockVector( size_t n )
-  : blockmap_( std::vector< std::vector< value_type_ > >( 1, std::vector< value_type_ >( max_block_size ) ) )
+BlockVector< value_type_ >::BlockVector( size_t n )
+  : blockmap_(
+      std::vector< std::vector< value_type_ > >( 1, std::move( std::vector< value_type_ >( max_block_size ) ) ) )
   , finish_( begin() )
 {
   size_t num_blocks_needed = std::ceil( static_cast< double >( n ) / max_block_size );
@@ -329,7 +339,7 @@ inline BlockVector< value_type_ >::BlockVector( size_t n )
   {
     blockmap_.emplace_back( max_block_size );
   }
-  finish_ = begin(); // Because the blockmap has changed we need to recreate the iterator
+  finish_ = begin();  // Because the blockmap has changed we need to recreate the iterator
   finish_ += n;
 }
 
@@ -394,7 +404,7 @@ BlockVector< value_type_ >::end() const
 }
 
 template < typename value_type_ >
-inline void
+void
 BlockVector< value_type_ >::push_back( const value_type_& value )
 {
   // If this is the last element in the current block, add another block
@@ -411,7 +421,24 @@ BlockVector< value_type_ >::push_back( const value_type_& value )
 }
 
 template < typename value_type_ >
-inline void
+void
+BlockVector< value_type_ >::push_back( value_type_&& value )
+{
+  // If this is the last element in the current block, add another block
+  if ( finish_.block_it_ == finish_.current_block_end_ - 1 )
+  {
+    // Need to get the current position here, then recreate the iterator after we extend the blockmap,
+    // because after the blockmap is changed the iterator becomes invalid.
+    const auto current_block = finish_.block_vector_it_ - finish_.block_vector_->blockmap_.begin();
+    blockmap_.emplace_back( max_block_size );
+    finish_.block_vector_it_ = finish_.block_vector_->blockmap_.begin() + current_block;
+  }
+  *finish_ = std::move( value );
+  ++finish_;
+}
+
+template < typename value_type_ >
+void
 BlockVector< value_type_ >::clear()
 {
   for ( auto it = blockmap_.begin(); it != blockmap_.end(); ++it )
@@ -428,7 +455,7 @@ template < typename value_type_ >
 inline size_t
 BlockVector< value_type_ >::size() const
 {
-  size_t element_index; // Where we are in the current block
+  size_t element_index;  // Where we are in the current block
   if ( finish_.block_vector_it_ >= blockmap_.end() )
   {
     // If the current block is completely filled
@@ -442,7 +469,7 @@ BlockVector< value_type_ >::size() const
 }
 
 template < typename value_type_ >
-inline typename BlockVector< value_type_ >::iterator
+typename BlockVector< value_type_ >::iterator
 BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
 {
   assert( first.block_vector_ == this );
@@ -459,7 +486,7 @@ BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
   }
   else
   {
-    auto repl_it = first.const_cast_(); // Iterator for elements to be replaced.
+    auto repl_it = first.const_cast_();  // Iterator for elements to be replaced.
     for ( auto element = last; element != end(); ++element )
     {
       *repl_it = std::move( *element );
@@ -495,7 +522,7 @@ BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
 }
 
 template < typename value_type_ >
-inline void
+void
 BlockVector< value_type_ >::print_blocks() const
 {
   std::cerr << "this: \t\t" << this << "\n";
@@ -529,35 +556,35 @@ template < typename value_type_ >
 inline typename BlockVector< value_type_ >::size_type
 BlockVector< value_type_ >::max_size() const
 {
-  throw NotImplemented( "BlockVector max_size() is not implemented." );
+  throw nest::NotImplemented( "BlockVector max_size() is not implemented." );
 }
 
 template < typename value_type_ >
 inline typename BlockVector< value_type_ >::reverse_iterator
 BlockVector< value_type_ >::rbegin()
 {
-  throw NotImplemented( "BlockVector rbegin() is not implemented." );
+  throw nest::NotImplemented( "BlockVector rbegin() is not implemented." );
 }
 
 template < typename value_type_ >
 inline typename BlockVector< value_type_ >::reverse_iterator
 BlockVector< value_type_ >::rbegin() const
 {
-  throw NotImplemented( "BlockVector rbegin() is not implemented." );
+  throw nest::NotImplemented( "BlockVector rbegin() is not implemented." );
 }
 
 template < typename value_type_ >
 inline typename BlockVector< value_type_ >::reverse_iterator
 BlockVector< value_type_ >::rend()
 {
-  throw NotImplemented( "BlockVector rend() is not implemented." );
+  throw nest::NotImplemented( "BlockVector rend() is not implemented." );
 }
 
 template < typename value_type_ >
 inline typename BlockVector< value_type_ >::reverse_iterator
 BlockVector< value_type_ >::rend() const
 {
-  throw NotImplemented( "BlockVector rend() is not implemented." );
+  throw nest::NotImplemented( "BlockVector rend() is not implemented." );
 }
 
 /////////////////////////////////////////////////////////////

@@ -13,8 +13,7 @@ Please make sure you have:
 * Installed the required `dependencies <https://github.com/nest/nest-simulator/blob/master/environment.yml>`_
 * Viewed the :ref:`CMake options <cmake_options>`
 
-You can also check our `Mailing List Archive <https://www.nest-initiative.org/mailinglist/hyperkitty/list/
-users@nest-simulator.org/>`_ and `Stack Overflow <https://stackoverflow.com/questions/tagged/nest-simulator>`_
+You can also check our `Mailing List Archive <https://www.nest-simulator.org/mailinglist/>`_ and `Stack Overflow <https://stackoverflow.com/questions/tagged/nest-simulator>`_
 to see if your question has been resolved.
 
 1. CMAKE error says a <package> was not found or <package> is too old
@@ -37,7 +36,7 @@ to see if your question has been resolved.
 
 
 **If the error still persists**, you may have more than one installation of the <package>.  A conflict may occur between different package binaries:
-Your system may prefentially choose a system-wide installation of a package (e.g., /usr/bin/<package>), rather than a
+Your system may preferentially choose a system-wide installation of a package (e.g., /usr/bin/<package>), rather than a
 local environment installation (e.g., /home/user/ENV/bin/<package>).
 
 
@@ -118,7 +117,7 @@ This error message means something in your environment is not set correctly, dep
 
 1. Check which Python version you are running
 
-   You must use **Python 3.8** or newer if you installed NEST with
+   You must use Python :version:`python` or newer if you installed NEST with
 
    a. the Ubuntu PPA,
    b. the conda-forge package,
@@ -127,18 +126,23 @@ This error message means something in your environment is not set correctly, dep
 
    Type ``python`` or ``ipython`` in the terminal. The python version that is used will be displayed.
 
-   If the Python version displayed is 2.X, you need to run  ``python3`` or ``ipython3`` instead of ``python`` or ``ipython``.
+   If the Python version displayed is 2.X, you need update your system.
 
+   In case ``python`` returns "command not found", consider one of the following:
+   1. Make sure your environment (venv, virtualenv, mamba, …) is correctly loaded
+   2. If you want to run with your system Python, make sure you have a corresponding symlink in place (e.g. by installing ``sudo apt install python-is-python3``)
 
 If your Python version is correct and you still have the same error, then try one of the following options:
 
-2a. If you compiled NEST from source
+2a. If you compiled NEST from source and installed into a non-standard location
 
-    * Your path variables may not be set correctly, in that case run:
+    * Make sure the installed NEST can be found by Python by adding the install
+      path to your ``PYTHONPATH`` variable. Find the path corresponding to your
+      installation and run a command in the following format:
 
           .. code-block:: bash
 
-              source <nest_install_dir>/bin/nest_vars.sh
+              export PYTHONPATH="<nest_install_dir>/lib/python.../site-packages"
 
 
 
@@ -150,7 +154,7 @@ If your Python version is correct and you still have the same error, then try on
 
         .. code-block:: bash
 
-            conda info -e
+            mamba info -e
 
     An asterisk (\*) indicates the active environment.
 
@@ -158,7 +162,7 @@ If your Python version is correct and you still have the same error, then try on
 
         .. code-block:: bash
 
-            conda activate ENVNAME
+            mamba activate ENVNAME
 
     Try to ``import nest`` in Python.
 
@@ -175,22 +179,22 @@ If your Python version is correct and you still have the same error, then try on
 
          .. code-block:: bash
 
-             /path/to/conda/envs/ENVNAME/bin/python3
-             /path/to/conda/envs/ENVNAME/bin/nest
+             /path/to/mamba/envs/ENVNAME/bin/python3
+             /path/to/mamba/envs/ENVNAME/bin/nest
 
 
     You can also view the list of packages in the active environment, by running:
 
         .. code-block:: bash
 
-            conda list
+            mamba list
 
     If the package is not in your environment, then it needs to be installed.
 
-    If something is missing, you can try to  ``conda install <package>`` BUT be aware that this **may break pre-installed packages**!
+    If something is missing, you can try to  ``mamba install <package>`` BUT be aware that this **may break pre-installed packages**!
 
-    You may be better off creating a new Conda environment and install NEST with all needed packages at one time!
-    See the section on :ref:`installation for Conda <install_nest>`.
+    You may be better off creating a new mamba environment and install NEST with all needed packages at one time!
+    See the section on :ref:`installation for NEST with conda-forge <install_nest>`.
 
 
 

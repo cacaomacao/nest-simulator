@@ -39,12 +39,6 @@
 #include "spikecounter.h"
 #include "syn_id_delay.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-
 namespace nest
 {
 
@@ -76,15 +70,15 @@ class ConnTestDummyNodeBase : public Node
   {
   }
   void
-  update( const nest::Time&, long, long ) override
+  update( const Time&, long, long ) override
   {
   }
   void
-  set_status( const DictionaryDatum& ) override
+  set_status( const Dictionary& ) override
   {
   }
   void
-  get_status( DictionaryDatum& ) const override
+  get_status( Dictionary& ) const override
   {
   }
   void
@@ -99,6 +93,7 @@ class ConnTestDummyNodeBase : public Node
 
 /**
  * Base class for representing connections.
+ *
  * It provides the mandatory properties receiver port and target,
  * as well as the functions get_status() and set_status()
  * to read and write them. A suitable Connector containing these
@@ -118,6 +113,9 @@ public:
   // properties used when registering a connection with the ModelManager
   static constexpr ConnectionModelProperties properties = ConnectionModelProperties::NONE;
 
+  // Whether this connection type supports flush events.
+  static constexpr bool supports_flush_event = false;
+
   Connection()
     : target_()
     , syn_id_delay_( 1.0 )
@@ -133,12 +131,12 @@ public:
    * To prevent erronous calls of this function on primary connections, the base class implementation
    * below just contains `assert(false)`.
    */
-  SecondaryEvent* get_secondary_event();
+  std::unique_ptr< SecondaryEvent > get_secondary_event();
 
   /**
    * Get all properties of this connection and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties of this connection from the values given in dictionary.
@@ -146,7 +144,7 @@ public:
    * @note Target and Rport cannot be changed after a connection has been
    * created.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   /**
    * Check syn_spec dictionary for parameters that are not allowed with the
@@ -157,8 +155,10 @@ public:
    *
    * @note Classes requiring checks need to override the function with their own
    * implementation, as this base class implementation does not do anything.
+   *
+   * @see ConnectorModel::check_synapse_params
    */
-  void check_synapse_params( const DictionaryDatum& d ) const;
+  void check_synapse_params( const Dictionary& d ) const;
 
   /**
    * Calibrate the delay of this connection to the desired resolution.
@@ -226,20 +226,21 @@ public:
   }
 
   /**
-   * triggers an update of a synaptic weight
-   * this function is needed for neuromodulated synaptic plasticity
+   * Triggers an update of a synaptic weight
+   *
+   * This function is needed for neuromodulated synaptic plasticity
    */
-  void trigger_update_weight( const thread,
+  void trigger_update_weight( const size_t,
     const std::vector< spikecounter >&,
     const double,
     const CommonSynapseProperties& );
 
   Node*
-  get_target( const thread tid ) const
+  get_target( const size_t tid ) const
   {
     return target_.get_target_ptr( tid );
   }
-  rport
+  size_t
   get_rport() const
   {
     return target_.get_rport();
@@ -301,15 +302,12 @@ protected:
    * \param the last spike produced by the presynaptic neuron (for STDP and
    * maturing connections)
    */
-  void check_connection_( Node& dummy_target, Node& source, Node& target, const rport receptor_type );
+  void check_connection_( Node& dummy_target, Node& source, Node& target, const size_t receptor_type );
 
-  /* the order of the members below is critical as it influcences the size of the object.
-   * Please leave unchanged as:
-   *   targetidentifierT target_;
-   *   SynIdDelay syn_id_delay_;
-   */
+  // The order of the members below is critical as it influcences the size of the object.
+  // Please leave unchanged!
   targetidentifierT target_;
-  //! syn_id (9 bit), delay (21 bit) in timesteps of this connection and more_targets and disabled flags (each 1 bit)
+  // syn_id (9 bit), delay (21 bit) in timesteps of this connection and more_targets and disabled flags (each 1 bit)
   SynIdDelay syn_id_delay_;
 };
 
@@ -321,7 +319,7 @@ inline void
 Connection< targetidentifierT >::check_connection_( Node& dummy_target,
   Node& source,
   Node& target,
-  const rport receptor_type )
+  const size_t receptor_type )
 {
   // 1. does this connection support the event type sent by source
   // try to send event from source to dummy_target
@@ -349,18 +347,18 @@ Connection< targetidentifierT >::check_connection_( Node& dummy_target,
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::get_status( DictionaryDatum& d ) const
+Connection< targetidentifierT >::get_status( Dictionary& d ) const
 {
-  def< double >( d, names::delay, syn_id_delay_.get_delay_ms() );
+  d[ names::delay ] = syn_id_delay_.get_delay_ms();
   target_.get_status( d );
 }
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& )
+Connection< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& )
 {
   double delay;
-  if ( updateValue< double >( d, names::delay, delay ) )
+  if ( d.update_value( names::delay, delay ) )
   {
     kernel().connection_manager.get_delay_checker().assert_valid_delay_ms( delay );
     syn_id_delay_.set_delay_ms( delay );
@@ -370,7 +368,7 @@ Connection< targetidentifierT >::set_status( const DictionaryDatum& d, Connector
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::check_synapse_params( const DictionaryDatum& ) const
+Connection< targetidentifierT >::check_synapse_params( const Dictionary& ) const
 {
 }
 
@@ -389,7 +387,7 @@ Connection< targetidentifierT >::calibrate( const TimeConverter& tc )
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::trigger_update_weight( const thread,
+Connection< targetidentifierT >::trigger_update_weight( const size_t,
   const std::vector< spikecounter >&,
   const double,
   const CommonSynapseProperties& )
@@ -398,12 +396,13 @@ Connection< targetidentifierT >::trigger_update_weight( const thread,
 }
 
 template < typename targetidentifierT >
-SecondaryEvent*
+std::unique_ptr< SecondaryEvent >
 Connection< targetidentifierT >::get_secondary_event()
 {
-  assert( false );
+  assert( false and "Non-primary connections have to provide get_secondary_event()" );
+  return nullptr;
 }
 
-} // namespace nest
+}  // namespace nest
 
-#endif // CONNECTION_H
+#endif /* CONNECTION_H */

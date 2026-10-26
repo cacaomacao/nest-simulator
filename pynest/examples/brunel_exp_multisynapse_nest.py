@@ -24,7 +24,7 @@ Random balanced network (exp synapses, multiple time constants)
 ---------------------------------------------------------------
 
 This script simulates an excitatory and an inhibitory population on
-the basis of the network used in [1]_.
+the basis of the network used in :footcite:p:`Brunel2000`.
 
 The example demonstrate the usage of the multisynapse neuron
 model. Each spike arriving at the neuron triggers an exponential
@@ -42,9 +42,7 @@ network are recorded.
 References
 ~~~~~~~~~~
 
-.. [1] Brunel N (2000). Dynamics of sparsely connected networks of excitatory and
-       inhibitory spiking neurons. Journal of Computational Neuroscience 8,
-       183-208.
+.. footbibliography::
 
 See Also
 ~~~~~~~~
@@ -57,9 +55,10 @@ See Also
 # Import all necessary modules for simulation, analysis and plotting.
 
 import time
+
+import matplotlib.pyplot as plt
 import nest
 import nest.raster_plot
-import matplotlib.pyplot as plt
 
 nest.ResetKernel()
 
@@ -129,7 +128,7 @@ J_in = -g * J_ex  # amplitude of inhibitory postsynaptic current
 # Definition of threshold rate, which is the external rate needed to fix the
 # membrane potential around its threshold, the external firing rate and the
 # rate of the poisson generator which is multiplied by the in-degree CE and
-# converted to Hz by multiplication by 1000.
+# converted to spks/s by multiplication by 1000.
 
 nu_th = theta / (J * CE * tauMem)
 nu_ex = eta * nu_th
@@ -264,7 +263,7 @@ events_in = ispikes.n_events
 # Calculation of the average firing rate of the excitatory and the inhibitory
 # neurons by dividing the total number of recorded spikes by the number of
 # neurons recorded from and the simulation time. The multiplication by 1000.0
-# converts the unit 1/ms to 1/s=Hz.
+# converts the unit 1/ms to 1/s.
 
 rate_ex = events_ex / simtime * 1000.0 / N_rec
 rate_in = events_in / simtime * 1000.0 / N_rec
@@ -293,8 +292,8 @@ print(f"Number of neurons : {N_neurons}")
 print(f"Number of synapses: {num_synapses}")
 print(f"       Excitatory : {num_synapses_ex}")
 print(f"       Inhibitory : {num_synapses_in}")
-print(f"Excitatory rate   : {rate_ex:.2f} Hz")
-print(f"Inhibitory rate   : {rate_in:.2f} Hz")
+print(f"Excitatory rate   : {rate_ex:.2f} spks/s")
+print(f"Inhibitory rate   : {rate_in:.2f} spks/s")
 print(f"Building time     : {build_time:.2f} s")
 print(f"Simulation time   : {sim_time:.2f} s")
 

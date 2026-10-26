@@ -32,27 +32,20 @@ elements (stc and sfa).
 
 Population dynamics are visualized by raster plot and as average firing rate.
 
-See [1]_ and [2]_ for details.
+See :footcite:p:`Schwalger2017` and :footcite:p:`Mensi2012` for details.
 
 References
 ~~~~~~~~~~
 
-.. [1] Schwalger T, Degert M, Gerstner W (2017). Towards a theory of cortical columns: From spiking
-       neurons to interacting neural populations of finite size. PLoS Comput Biol.
-       https://doi.org/10.1371/journal.pcbi.1005507
-
-.. [2] Mensi S, Naud R, Pozzorini C, Avermann M, Petersen CC and
-       Gerstner W (2012). Parameter extraction and classification of
-       three cortical neuron types reveals two distinct adaptation
-       mechanisms. Journal of Neurophysiology. 107(6), pp.1756-1775.
+.. footbibliography::
 """
 
 ###############################################################################
 # Import all necessary modules for simulation and plotting.
 
+import matplotlib.pyplot as plt
 import nest
 import nest.raster_plot
-import matplotlib.pyplot as plt
 
 nest.ResetKernel()
 
@@ -64,7 +57,7 @@ simtime = 2000.0
 
 ###############################################################################
 # Definition of neural parameters for the GIF model. These parameters are
-# extracted by fitting the model to experimental data [2]_.
+# extracted by fitting the model to experimental data :footcite:p:`Mensi2012`.
 
 
 neuron_params = {
@@ -95,7 +88,7 @@ w_ex = 30.0  # synaptic weights inside the population (pA)
 # GIF neurons population.
 
 N_noise = 50  # size of Poisson group
-rate_noise = 10.0  # firing rate of Poisson neurons (Hz)
+rate_noise = 10.0  # firing rate of Poisson neurons (spks/s)
 w_noise = 20.0  # synaptic weights from Poisson to population neurons (pA)
 
 ###############################################################################

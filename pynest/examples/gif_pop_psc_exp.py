@@ -26,7 +26,7 @@ Population rate model of generalized integrate-and-fire neurons
 
 This script simulates a finite network of generalized integrate-and-fire
 (GIF) neurons directly on the mesoscopic population level using the effective
-stochastic population rate dynamics derived in the paper [1]_. The stochastic
+stochastic population rate dynamics derived in the paper :footcite:p:`Schwalger2017`. The stochastic
 population dynamics is implemented in the NEST model gif_pop_psc_exp. We
 demonstrate this model using the example of a Brunel network of two coupled
 populations, one excitatory and one inhibitory population.
@@ -38,18 +38,15 @@ NEST model ``gif_psc_exp``.
 References
 ~~~~~~~~~~
 
-.. [1] Schwalger T, Degert M, Gerstner W (2017). Towards a theory of cortical columns: From spiking
-       neurons to interacting neural populations of finite size. PLoS Comput Biol.
-       https://doi.org/10.1371/journal.pcbi.1005507
-
+.. footbibliography::
 """
 
+###############################################################################
+# Import necessary modules.
 
-# Loading the necessary modules:
-import numpy as np
 import matplotlib.pyplot as plt
 import nest
-
+import numpy as np
 
 ###############################################################################
 # We first set the parameters of the microscopic model:
@@ -117,7 +114,7 @@ tau_in = 6.0  # in ms
 # neurons), we can build the populations using the NEST model
 # ``gif_pop_psc_exp``:
 
-nest.set_verbosity("M_WARNING")
+nest.verbosity = nest.VerbosityLevel.WARNING
 nest.ResetKernel()
 nest.resolution = dt
 nest.print_time = True
@@ -226,12 +223,12 @@ for i, nest_i in enumerate(nest_pops):
 plt.figure(1)
 plt.clf()
 plt.subplot(2, 1, 1)
-plt.plot(t, A_N * 1000)  # plot population activities (in Hz)
-plt.ylabel(r"$A_N$ [Hz]")
+plt.plot(t, A_N * 1000)  # plot population activities (in spks/s)
+plt.ylabel(r"$A_N$ [spks/s]")
 plt.title("Population activities (mesoscopic sim.)")
 plt.subplot(2, 1, 2)
 plt.plot(t, Abar * 1000)  # plot instantaneous population rates (in Hz)
-plt.ylabel(r"$\bar A$ [Hz]")
+plt.ylabel(r"$\bar A$ [spks/s]")
 plt.xlabel("time [ms]")
 
 ###############################################################################
@@ -334,19 +331,19 @@ nest.Simulate(t_end + dt)
 
 ###############################################################################
 # Let's retrieve the data of the spike recorder and plot the activity of the
-# excitatory population (in Hz):
+# excitatory population (in spks/s):
 
 for i in range(len(nest_pops)):
     data_sr = nest_sr[i].get("events", "times") * dt - t0
     bins = np.concatenate((t, np.array([t[-1] + dt_rec])))
     A = np.histogram(data_sr, bins=bins)[0] / float(N[i]) / dt_rec
-    A_N[:, i] = A * 1000  # in Hz
+    A_N[:, i] = A * 1000  # in spks/s
 
 t = np.arange(dt, t_end + dt, dt_rec)
 plt.figure(2)
 plt.plot(t, A_N[:, 0])
 plt.xlabel("time [ms]")
-plt.ylabel("population activity [Hz]")
+plt.ylabel("population activity [spks/s]")
 plt.title("Population activities (microscopic sim.)")
 
 ###############################################################################

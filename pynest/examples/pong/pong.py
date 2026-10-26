@@ -22,7 +22,7 @@
 r"""Classes for running simulations of the classic game Pong
 --------------------------------------------------------
 The Class GameOfPong contains all necessary functionality for running simple
-simulations of Pong games. See [1]_ for details.
+simulations of Pong games. See :footcite:p:`Wunderlich2019` for details.
 
 See Also
 ---------
@@ -30,12 +30,11 @@ See Also
 
 References
 ----------
-.. [1] Wunderlich T., et al (2019). Demonstrating advantages of
-       neuromorphic computation: a pilot study. Frontiers in neuroscience, 13,
-       260. https://doi.org/10.3389/fnins.2019.00260
+.. footbibliography::
 
 :Authors: T Wunderlich, Electronic Vision(s), J Gille
 """
+
 import numpy as np
 
 LEFT_SCORE = -1
@@ -193,10 +192,7 @@ class GameOfPong(object):
         """Updates ball and paddle coordinates based on direction and velocity."""
         for paddle in [self.r_paddle, self.l_paddle]:
             paddle.y_pos += paddle.direction * paddle.velocity
-            if paddle.y_pos < 0:
-                paddle.y_pos = 0
-            if paddle.y_pos > self.y_length:
-                paddle.y_pos = self.y_length
+            paddle.y_pos = min(max(0, paddle.y_pos), self.y_length)
             paddle.update_cell()
         self.ball.y_pos += self.ball.velocity * self.ball.direction[1]
         self.ball.x_pos += self.ball.velocity * self.ball.direction[0]

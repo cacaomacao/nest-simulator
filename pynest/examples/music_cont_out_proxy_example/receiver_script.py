@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # receiver_script.py
@@ -26,9 +26,10 @@ Music example receiver script
 """
 
 import sys
+from itertools import dropwhile, takewhile
+
 import music
 import numpy
-from itertools import takewhile, dropwhile
 
 setup = music.Setup()
 stoptime = setup.config("stoptime")

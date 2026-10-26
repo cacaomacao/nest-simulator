@@ -29,24 +29,19 @@
 #define DEPRECATION_WARNING_H
 
 
-/** @BeginDocumentation
-
-   Name: DeprecationWarning - General deprecation warning class for models with
-                              deprecated parameters
-
-   Description:
-   General class for handling deprecations. The deprecation warning will only
-   be issued the first time the deprecated parameter is updated.
-
-   How to use:
-   In model constructor put
-     this->deprecation_warning.set_deprecated(deprecated_parameter);
-
-   In function updating the deprecated parameter put
-     node->deprecation_warning.deprecation_warning(deprecated_parameter);
-   or
-     node->deprecation_warning.deprecation_warning(deprecated_parameter,
-                                                   new_parameter);
+/**
+ * @brief General deprecation warning class for models with deprecated parameters.
+ *
+ * General class for handling deprecations. The deprecation warning will only
+ * be issued the first time the deprecated parameter is updated.
+ *
+ * @note Usage: In model constructor put
+ *       this->deprecation_warning.set_deprecated(deprecated_parameter);
+ *
+ *       In function updating the deprecated parameter put
+ *       node->deprecation_warning.deprecation_warning(deprecated_parameter);
+ *       or
+ *       node->deprecation_warning.deprecation_warning(deprecated_parameter, new_parameter);
  */
 
 
@@ -66,7 +61,7 @@ public:
   {
   }
 
-  /*
+  /**
    * Set parameter name to be deprecated.
    */
   void
@@ -75,8 +70,8 @@ public:
     deprecated_functions_[ name ] = true;
   }
 
-  /*
-   * Issues deprecation warning.
+  /**
+   * Issue a deprecation warning.
    */
   void deprecation_warning( std::string name );
   void deprecation_warning( std::string name, std::string new_name );

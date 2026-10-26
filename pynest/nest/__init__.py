@@ -21,9 +21,9 @@
 
 r"""PyNEST - Python interface for the NEST Simulator
 
-* ``nest.helpdesk()`` opens the NEST documentation in your browser.
-
 * ``nest.__version__`` displays the NEST version.
+
+* ``nest.build_info`` provides detailed information about the NEST build.
 
 * ``nest.node_models`` shows all available neuron and device models.
 
@@ -56,11 +56,12 @@ For more information visit https://www.nest-simulator.org.
 # instance later on. Use `.copy()` to prevent pollution with other variables
 _original_module_attrs = globals().copy()
 
+import builtins  # noqa
+import importlib  # noqa
 import sys  # noqa
 import types  # noqa
-import importlib  # noqa
-import builtins  # noqa
-from .ll_api_kernel_attributes import KernelAttribute  # noqa
+
+from .ll_api import KernelAttribute  # noqa
 
 try:
     import versionchecker  # noqa: F401
@@ -70,18 +71,20 @@ except ImportError:
 
 class NestModule(types.ModuleType):
     """
-    A module class for the `nest` root module to control the dynamic generation
+    A module class for the ``nest`` root module to control the dynamic generation
     of module level attributes such as the KernelAttributes, lazy loading
     some submodules and importing the public APIs of the `lib` submodules.
     """
 
     from . import ll_api  # noqa
-    from . import pynestkernel as kernel  # noqa
-    from . import random  # noqa
-    from . import math  # noqa
-    from . import spatial_distributions  # noqa
     from . import logic  # noqa
+    from . import math  # noqa
+    from . import random  # noqa
+    from . import spatial_distributions  # noqa
     from .ll_api import set_communicator
+
+    NESTErrors = ll_api.nestkernel.NESTErrors
+    NESTError = ll_api.nestkernel.NESTErrors.KernelException
 
     def __init__(self, name):
         super().__init__(name)
@@ -91,7 +94,6 @@ class NestModule(types.ModuleType):
 
         # Import public APIs of submodules into the `nest.` namespace
         _rel_import_star(self, ".lib.hl_api_connections")  # noqa: F821
-        _rel_import_star(self, ".lib.hl_api_exceptions")  # noqa: F821
         _rel_import_star(self, ".lib.hl_api_info")  # noqa: F821
         _rel_import_star(self, ".lib.hl_api_models")  # noqa: F821
         _rel_import_star(self, ".lib.hl_api_nodes")  # noqa: F821
@@ -108,11 +110,13 @@ class NestModule(types.ModuleType):
         type(self).visualization = _lazy_module_property("visualization")  # noqa: F821
         type(self).voltage_trace = _lazy_module_property("voltage_trace")  # noqa: F821
 
-        self.__version__ = ll_api.sli_func("statusdict /version get")  # noqa: F821
         # Finalize the nest module with a public API.
         _api = list(k for k in self.__dict__ if not k.startswith("_"))
         _api.extend(k for k in dir(type(self)) if not k.startswith("_"))
         self.__all__ = list(set(_api))
+
+        # Add version for backward compatibility
+        self.__version__ = NestModule.ll_api.nestkernel.llapi_get_kernel_status()["build_info"]["version"]
 
         # Block setting of unknown attributes
         type(self).__setattr__ = _setattr_error
@@ -144,6 +148,12 @@ class NestModule(types.ModuleType):
     kernel_status = KernelAttribute("dict", "Get the complete kernel status", readonly=True)
     resolution = KernelAttribute("float", "The resolution of the simulation (in ms)", default=0.1)
     biological_time = KernelAttribute("float", "The current simulation time (in ms)")
+    build_info = KernelAttribute(
+        "dict",
+        "Information about the build and compile configuration of NEST",
+        readonly=True,
+    )
+    memory_size = KernelAttribute("int", "Memory size of NEST process in kB (-1 if unavailable)", readonly=True)
     to_do = KernelAttribute("int", "The number of steps yet to be simulated", readonly=True)
     max_delay = KernelAttribute("float", "The maximum delay in the network", default=0.1)
     min_delay = KernelAttribute("float", "The minimum delay in the network", default=0.1)
@@ -190,11 +200,6 @@ class NestModule(types.ModuleType):
         "Whether to transmit precise spike times in MPI communication",
         readonly=True,
     )
-    adaptive_spike_buffers = KernelAttribute(
-        "bool",
-        "Whether MPI buffers for communication of spikes resize on the fly",
-        default=True,
-    )
     adaptive_target_buffers = KernelAttribute(
         "bool",
         "Whether MPI buffers for communication of connections resize on the fly",
@@ -220,25 +225,55 @@ class NestModule(types.ModuleType):
         "Total size of MPI buffer for communication of connections",
         default=2,
     )
-    growth_factor_buffer_spike_data = KernelAttribute(
-        "float",
-        ("If MPI buffers for communication of spikes resize on the fly, " + "grow them by this factor each round"),
-        default=1.5,
-    )
     growth_factor_buffer_target_data = KernelAttribute(
         "float",
         ("If MPI buffers for communication of connections resize on the " + "fly, grow them by this factor each round"),
         default=1.5,
     )
-    max_buffer_size_spike_data = KernelAttribute(
-        "int",
-        "Maximal size of MPI buffers for communication of spikes",
-        default=8388608,
-    )
     max_buffer_size_target_data = KernelAttribute(
         "int",
         "Maximal size of MPI buffers for communication of connections",
         default=16777216,
+    )
+    spike_buffer_grow_extra = KernelAttribute(
+        "float",
+        "When spike exchange buffer is expanded, resize it to "
+        + "`(1 + spike_buffer_grow_extra) * required_buffer_size`",
+        default=0.5,
+    )
+    spike_buffer_shrink_limit = KernelAttribute(
+        "float",
+        (
+            "If the largest number of spikes sent from any rank to any rank is less than "
+            + "`spike_buffer_shrink_limit * buffer_size`, then reduce buffer size. "
+            + "`spike_buffer_shrink_limit == 0` means that buffers never shrink. "
+            + "See ``spike_buffer_shrink_spare`` for how the new buffer size is determined"
+        ),
+        default=0.2,
+    )
+    spike_buffer_shrink_spare = KernelAttribute(
+        "float",
+        (
+            "When the buffer shrinks, set the new size to "
+            + "`(1 + spike_buffer_shrink_spare) * required_buffer_size`. "
+            + "See `spike_buffer_shrink_limit` for when buffers shrink"
+        ),
+        default=0.1,
+    )
+    spike_buffer_resize_log = KernelAttribute(
+        "dict",
+        (
+            "Log of spike buffer resizing as a dictionary. It contains the "
+            + "`times` of the resizings (simulation clock in steps, always multiple of ``min_delay``), "
+            + "``global_max_spikes_sent``, that is, the observed spike number that triggered the resize, "
+            + "and the ``new_buffer_size``. Sizes for the buffer section sent from one rank to another rank"
+        ),
+        readonly=True,
+    )
+    cycle_time_log = KernelAttribute(
+        "dict",
+        ("Information on the duration and spike counts within each update cycle."),
+        readonly=True,
     )
     use_wfr = KernelAttribute("bool", "Whether to use waveform relaxation method", default=True)
     wfr_comm_interval = KernelAttribute(
@@ -260,16 +295,6 @@ class NestModule(types.ModuleType):
         "int", "Interpolation order of polynomial used in wfr iterations", default=3
     )
     max_num_syn_models = KernelAttribute("int", "Maximal number of synapse models supported", readonly=True)
-    sort_connections_by_source = KernelAttribute(
-        "bool",
-        (
-            "Whether to sort connections by their source; increases"
-            + " construction time of presynaptic data structures, decreases"
-            + " simulation time if the average number of outgoing connections"
-            + " per neuron is smaller than the total number of threads"
-        ),
-        default=True,
-    )
     structural_plasticity_synapses = KernelAttribute(
         "dict",
         (
@@ -299,8 +324,7 @@ class NestModule(types.ModuleType):
             "Whether to use spike compression; if a neuron has targets on"
             + " multiple threads of a process, this switch makes sure that only"
             + " a single packet is sent to the process instead of one packet"
-            + " per target thread; requires"
-            + " ``nest.sort_connections_by_source = True``"
+            + " per target thread; it implies that connections are sorted by source."
         ),
         default=True,
     )
@@ -387,6 +411,32 @@ class NestModule(types.ModuleType):
         ),
         default=float("+inf"),
     )
+    eprop_update_interval = KernelAttribute(
+        "float",
+        ("Task-specific update interval of the e-prop plasticity mechanism [ms]."),
+        default=1000.0,
+    )
+    eprop_learning_window = KernelAttribute(
+        "float",
+        ("Task-specific learning window of the e-prop plasticity mechanism [ms]."),
+        default=1000.0,
+    )
+    eprop_reset_neurons_on_update = KernelAttribute(
+        "bool",
+        ("If True, reset dynamic variables of e-prop neurons upon e-prop update."),
+        default=True,
+    )
+    verbosity = KernelAttribute(
+        "VerbosityLevel",
+        (
+            "Controls NEST's verbosity. The following levels are available,"
+            + " from most to least chatty: ALL, DEBUG, STATUS, INFO,"
+            + " PROGRESS, DEPRECATED, WARNING, ERROR, FATAL, QUIET."
+            + " Default verbosity is INFO. To start NEST with a different verbosity"
+            + " and supress the startup message, set the environment variable PYNEST_QUIET=1"
+        ),
+        default=ll_api.nestkernel.VerbosityLevel.INFO,
+    )
 
     # Kernel attribute indices, used for fast lookup in `ll_api.py`
     _kernel_attr_names = builtins.set(k for k, v in vars().items() if isinstance(v, KernelAttribute))
@@ -468,8 +518,7 @@ def _lazy_module_property(module_name, optional=False, optional_hint=""):
         except ImportError as e:
             if optional:
                 raise ImportError(
-                    f"This functionality requires the optional module \
-                    {module_name}.{optional_hint}"
+                    f"This functionality requires the optional module {module_name}.{optional_hint}"
                 ) from None
             else:
                 raise e from None
@@ -486,7 +535,7 @@ _module = NestModule(__name__)
 _module.__dict__["NestModule"] = NestModule
 # Set the nest module object as the return value of `import nest` using sys
 sys.modules[__name__] = _module
-# Some compiled/binary components (`pynestkernel.pyx` for example) of NEST
+# Some compiled/binary components (`nestkernel_api.pyx` for example) of NEST
 # obtain a reference to this file's original module object instead of what's in
 # `sys.modules`. For these edge cases we make available all attributes of the
 # nest module instance to this file's module object.
@@ -496,4 +545,7 @@ globals().update(_module.__dict__)
 # Since these references are deleted, flake8 complains with an error
 # `F821 undefined name` where these variables are used. Hence we mark all those
 # lines with a `# noqa`
-del _rel_import_star, _lazy_module_property, _module, _original_module_attrs
+del _rel_import_star, _lazy_module_property, _original_module_attrs
+
+
+del _module

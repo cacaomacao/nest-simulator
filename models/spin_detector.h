@@ -82,6 +82,11 @@ Receives
 
 SpikeEvent
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: spin_detector
+
 EndUserDocs */
 
 /**
@@ -92,6 +97,8 @@ EndUserDocs */
  * stores them via its RecordingDevice.
  *
  */
+void register_spin_detector( const std::string& name );
+
 class spin_detector : public RecordingDevice
 {
 
@@ -110,7 +117,7 @@ public:
     return true;
   }
 
-  Name
+  std::string
   get_element_type() const override
   {
     return names::recorder;
@@ -127,13 +134,13 @@ public:
 
   void handle( SpikeEvent& ) override;
 
-  port handles_test_event( SpikeEvent&, rport ) override;
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
 
   Type get_type() const override;
   SignalType receives_signal() const override;
 
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
   void calibrate_time( const TimeConverter& tc ) override;
 
@@ -151,13 +158,13 @@ private:
    */
   void update( Time const&, const long, const long ) override;
 
-  index last_in_node_id_;
+  size_t last_in_node_id_;
   SpikeEvent last_event_;
   Time t_last_in_spike_;
 };
 
-inline port
-spin_detector::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+spin_detector::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -173,11 +180,11 @@ spin_detector::receives_signal() const
 }
 
 inline void
-nest::spin_detector::calibrate_time( const TimeConverter& tc )
+spin_detector::calibrate_time( const TimeConverter& tc )
 {
   t_last_in_spike_ = tc.from_old_tics( t_last_in_spike_.get_tics() );
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef SPIN_DETECTOR_H */

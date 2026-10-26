@@ -25,23 +25,23 @@ Weight adaptation according to the Urbanczik-Senn plasticity
 
 This script demonstrates the learning in a compartmental neuron where the
 dendritic synapses adapt their weight according to the plasticity rule by
-Urbanczik and Senn [1]_. In this simple setup, a spike pattern of 200 poisson
+Urbanczik and Senn :footcite:p:`Urbanczik2014`. In this simple setup, a spike pattern of 200 poisson
 spike trains is repeatedly presented to a neuron that is composed of one
 somatic and one dendritic compartment. At the same time, the somatic
 conductances are activated to produce a time-varying matching potential.
 After the learning, this signal is then reproduced by the membrane
-potential of the neuron. This script produces Fig. 1B in [1]_ but uses standard
+potential of the neuron. This script produces Fig. 1B in :footcite:p:`Urbanczik2014` but uses standard
 units instead of the unitless quantities used in the paper.
 
 References
 ~~~~~~~~~~
 
-.. [1] R. Urbanczik, W. Senn (2014): Learning by the Dendritic Prediction of
-       Somatic Spiking. Neuron, 81, 521-528.
+.. footbibliography::
 """
+
+import nest
 import numpy as np
 from matplotlib import pyplot as plt
-import nest
 
 
 def g_inh(amplitude, t_start, t_end):
@@ -217,7 +217,7 @@ soma_inh_inp = g_inh(ampl_inh, t_start, t_end)
 # poisson generators. The recorded spike times are then given to spike
 # generators.
 n_pg = 200  # number of poisson generators
-p_rate = 10.0  # rate in Hz
+p_rate = 10.0  # rate in spks/s
 
 pgs = nest.Create("poisson_generator", n=n_pg, params={"rate": p_rate})
 
@@ -266,7 +266,6 @@ wr = nest.Create("weight_recorder")
 # for recording the spiking of the soma
 sr_soma = nest.Create("spike_recorder")
 
-
 # create connections
 nest.Connect(sg_prox, prrt_nrns, {"rule": "one_to_one"})
 nest.CopyModel("urbanczik_synapse", "urbanczik_synapse_wr", {"weight_recorder": wr[0]})
@@ -284,7 +283,7 @@ nest.Connect(nrn, sr_soma)
 for i in np.arange(n_rep_total):
     # Set the spike times of the pattern for each spike generator
     for sg, t_sp in zip(sg_prox, t_srs):
-        nest.SetStatus(sg, {"spike_times": np.array(t_sp) + i * pattern_duration})
+        sg.spike_times = np.array(t_sp) + i * pattern_duration
 
     nest.Simulate(pattern_duration)
 

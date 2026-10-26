@@ -29,7 +29,7 @@
 namespace nest
 {
 
-/* BeginUserDocs: synapse, static
+/* BeginUserDocs: synapse, chemical, static
 
 Short description
 +++++++++++++++++
@@ -53,7 +53,14 @@ See also
 
 tsodyks_synapse, stdp_synapse
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: static_synapse
+
 EndUserDocs */
+
+void register_static_synapse( const std::string& name );
 
 template < typename targetidentifierT >
 class static_synapse : public Connection< targetidentifierT >
@@ -101,68 +108,69 @@ public:
     // Ensure proper overriding of overloaded virtual functions.
     // Return values from functions are ignored.
     using ConnTestDummyNodeBase::handles_test_event;
-    port
-    handles_test_event( SpikeEvent&, rport ) override
+    size_t
+    handles_test_event( SpikeEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( RateEvent&, rport ) override
+    size_t
+    handles_test_event( RateEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( DataLoggingRequest&, rport ) override
+    size_t
+    handles_test_event( DataLoggingRequest&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( CurrentEvent&, rport ) override
+    size_t
+    handles_test_event( CurrentEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( ConductanceEvent&, rport ) override
+    size_t
+    handles_test_event( ConductanceEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( DoubleDataEvent&, rport ) override
+    size_t
+    handles_test_event( DoubleDataEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( DSSpikeEvent&, rport ) override
+    size_t
+    handles_test_event( DSSpikeEvent&, size_t ) override
     {
       return invalid_port;
     }
-    port
-    handles_test_event( DSCurrentEvent&, rport ) override
+    size_t
+    handles_test_event( DSCurrentEvent&, size_t ) override
     {
       return invalid_port;
     }
   };
 
   void
-  check_connection( Node& s, Node& t, rport receptor_type, const CommonPropertiesType& )
+  check_connection( Node& s, Node& t, size_t receptor_type, const CommonPropertiesType& )
   {
     ConnTestDummyNode dummy_target;
     ConnectionBase::check_connection_( dummy_target, s, t, receptor_type );
   }
 
-  void
-  send( Event& e, const thread tid, const CommonSynapseProperties& )
+  bool
+  send( Event& e, const size_t tid, const CommonSynapseProperties& )
   {
     e.set_weight( weight_ );
     e.set_delay_steps( get_delay_steps() );
     e.set_receiver( *get_target( tid ) );
     e.set_rport( get_rport() );
     e();
+    return true;
   }
 
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   void
   set_weight( double w )
@@ -176,22 +184,22 @@ constexpr ConnectionModelProperties static_synapse< targetidentifierT >::propert
 
 template < typename targetidentifierT >
 void
-static_synapse< targetidentifierT >::get_status( DictionaryDatum& d ) const
+static_synapse< targetidentifierT >::get_status( Dictionary& d ) const
 {
 
   ConnectionBase::get_status( d );
-  def< double >( d, names::weight, weight_ );
-  def< long >( d, names::size_of, sizeof( *this ) );
+  d[ names::weight ] = weight_;
+  d[ names::size_of ] = static_cast< long >( sizeof( *this ) );
 }
 
 template < typename targetidentifierT >
 void
-static_synapse< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& cm )
+static_synapse< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& cm )
 {
   ConnectionBase::set_status( d, cm );
-  updateValue< double >( d, names::weight, weight_ );
+  d.update_value( names::weight, weight_ );
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef STATICSYNAPSE_H */

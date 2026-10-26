@@ -32,7 +32,7 @@
 namespace nest
 {
 
-/* BeginUserDocs: synapse, spike-timing-dependent plasticity
+/* BeginUserDocs: synapse, chemical, functional, stdp
 
 Short description
 +++++++++++++++++
@@ -43,7 +43,7 @@ Description
 +++++++++++
 
 ``stdp_pl_synapse`` is a connector to create synapses with spike time
-dependent plasticity using homoegeneous parameters (as defined in [1]_).
+dependent plasticity using homoegeneous parameters (as defined in :footcite:p:`Morrison2007c`).
 
 Parameters
 ++++++++++
@@ -70,9 +70,7 @@ the model.
 References
 ++++++++++
 
-.. [1] Morrison A, Aertsen A, Diesmann M. (2007) Spike-timing dependent
-       plasticity in balanced random netrks. Neural Computation,
-       19(6):1437-1467. DOI: https://doi.org/10.1162/neco.2007.19.6.1437
+.. footbibliography::
 
 Transmits
 +++++++++
@@ -83,6 +81,11 @@ See also
 ++++++++
 
 stdp_synapse, tsodyks_synapse, static_synapse
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: stdp_pl_synapse_hom
 
 EndUserDocs */
 
@@ -103,16 +106,16 @@ public:
   /**
    * Get all properties and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties from the values given in dictionary.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   // data members common to all connections
   double tau_plus_;
-  double tau_plus_inv_; //!< 1 / tau_plus for efficiency
+  double tau_plus_inv_;  //!< 1 / tau_plus for efficiency
   double lambda_;
   double alpha_;
   double mu_;
@@ -123,6 +126,8 @@ public:
  * Class representing an STDP connection with homogeneous parameters, i.e.
  * parameters are the same for all synapses.
  */
+void register_stdp_pl_synapse_hom( const std::string& name );
+
 template < typename targetidentifierT >
 class stdp_pl_synapse_hom : public Connection< targetidentifierT >
 {
@@ -160,18 +165,18 @@ public:
   /**
    * Get all properties of this connection and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties of this connection from the values given in dictionary.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   /**
    * Send an event to the receiver of this connection.
    * \param e The event to send
    */
-  void send( Event& e, thread t, const STDPPLHomCommonProperties& );
+  bool send( Event& e, size_t t, const STDPPLHomCommonProperties& );
 
   class ConnTestDummyNode : public ConnTestDummyNodeBase
   {
@@ -179,8 +184,8 @@ public:
     // Ensure proper overriding of overloaded virtual functions.
     // Return values from functions are ignored.
     using ConnTestDummyNodeBase::handles_test_event;
-    port
-    handles_test_event( SpikeEvent&, rport ) override
+    size_t
+    handles_test_event( SpikeEvent&, size_t ) override
     {
       return invalid_port;
     }
@@ -200,7 +205,7 @@ public:
    * \param receptor_type The ID of the requested receptor type
    */
   void
-  check_connection( Node& s, Node& t, rport receptor_type, const CommonPropertiesType& )
+  check_connection( Node& s, Node& t, size_t receptor_type, const CommonPropertiesType& )
   {
     ConnTestDummyNode dummy_target;
 
@@ -248,8 +253,8 @@ constexpr ConnectionModelProperties stdp_pl_synapse_hom< targetidentifierT >::pr
  * \param p The port under which this connection is stored in the Connector.
  */
 template < typename targetidentifierT >
-inline void
-stdp_pl_synapse_hom< targetidentifierT >::send( Event& e, thread t, const STDPPLHomCommonProperties& cp )
+inline bool
+stdp_pl_synapse_hom< targetidentifierT >::send( Event& e, size_t t, const STDPPLHomCommonProperties& cp )
 {
   // synapse STDP depressing/facilitation dynamics
 
@@ -290,6 +295,8 @@ stdp_pl_synapse_hom< targetidentifierT >::send( Event& e, thread t, const STDPPL
   Kplus_ = Kplus_ * std::exp( ( t_lastspike_ - t_spike ) * cp.tau_plus_inv_ ) + 1.0;
 
   t_lastspike_ = t_spike;
+
+  return true;
 }
 
 template < typename targetidentifierT >
@@ -303,29 +310,29 @@ stdp_pl_synapse_hom< targetidentifierT >::stdp_pl_synapse_hom()
 
 template < typename targetidentifierT >
 void
-stdp_pl_synapse_hom< targetidentifierT >::get_status( DictionaryDatum& d ) const
+stdp_pl_synapse_hom< targetidentifierT >::get_status( Dictionary& d ) const
 {
 
   // base class properties, different for individual synapse
   ConnectionBase::get_status( d );
-  def< double >( d, names::weight, weight_ );
+  d[ names::weight ] = weight_;
 
   // own properties, different for individual synapse
-  def< double >( d, names::Kplus, Kplus_ );
-  def< long >( d, names::size_of, sizeof( *this ) );
+  d[ names::Kplus ] = Kplus_;
+  d[ names::size_of ] = static_cast< long >( sizeof( *this ) );
 }
 
 template < typename targetidentifierT >
 void
-stdp_pl_synapse_hom< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& cm )
+stdp_pl_synapse_hom< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& cm )
 {
   // base class properties
   ConnectionBase::set_status( d, cm );
-  updateValue< double >( d, names::weight, weight_ );
+  d.update_value( names::weight, weight_ );
 
-  updateValue< double >( d, names::Kplus, Kplus_ );
+  d.update_value( names::Kplus, Kplus_ );
 }
 
-} // of namespace nest
+}  // of namespace nest
 
-#endif // of #ifndef STDP_PL_SYNAPSE_HOM_H
+#endif  // of #ifndef STDP_PL_SYNAPSE_HOM_H

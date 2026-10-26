@@ -23,21 +23,21 @@
 Classes defining the different PyNEST types
 """
 
-from ..ll_api import sli_func, sps, sr, spp, take_array_index
-from .. import pynestkernel as kernel
+import json
+import numbers
+from math import floor, log
+
+import numpy
+
+from .. import nestkernel_api as nestkernel
 from .hl_api_helper import (
-    broadcast,
     get_parameters,
     get_parameters_hierarchical_addressing,
     is_iterable,
-    is_literal,
     restructure_data,
 )
+from .hl_api_parallel_computing import NumProcesses, Rank
 from .hl_api_simulation import GetKernelStatus
-
-import numpy
-import json
-from math import floor, log
 
 try:
     import pandas
@@ -45,6 +45,18 @@ try:
     HAVE_PANDAS = True
 except ImportError:
     HAVE_PANDAS = False
+
+# A NumPy2 conformant implementation of NodeCollection.__array__() must have the signature
+# __array__(object, dtype=None, copy=None), where copy is passed on to numpy.array(..., copy=copy).
+# Numpy 1 does not support the value None for copy, so we determine here which default value to use.
+# This avoids checks at runtime. See also
+#   https://numpy.org/doc/stable/numpy_2_0_migration_guide.html#adapting-to-changes-in-the-copy-keyword
+#   https://numpy.org/doc/2.0/reference/generated/numpy.array.html#numpy-array
+try:
+    numpy.array(1, copy=None)
+    _ARRAY_COPY_DEFAULT = None
+except ValueError:
+    _ARRAY_COPY_DEFAULT = True
 
 __all__ = [
     "CollocatedSynapses",
@@ -54,7 +66,7 @@ __all__ = [
     "NodeCollection",
     "Parameter",
     "Receptors",
-    "serializable",
+    "serialize_data",
     "SynapseCollection",
     "to_json",
 ]
@@ -82,7 +94,8 @@ def CreateParameter(parametertype, specs):
 
     Notes
     -----
-    - Instead of using `CreateParameter` you can also use the various parametrizations embedded in NEST. See for
+
+    Instead of using `CreateParameter` you can also use the various parametrizations embedded in NEST. See for
     instance :py:func:`.uniform`.
 
     **Parameter types**
@@ -91,11 +104,14 @@ def CreateParameter(parametertype, specs):
     acceptable keys for their corresponding specification dictionaries:
 
     * Constant
+
         ::
 
             'constant' :
                 {'value' : float} # constant value
+
     * Randomization
+
         ::
 
             # random parameter with uniform distribution in [min,max)
@@ -112,8 +128,9 @@ def CreateParameter(parametertype, specs):
             'lognormal' :
                 {'mean' : float, # mean value of logarithm, default: 0.0
                  'std'  : float} # standard deviation of log, default: 1.0
+
     """
-    return sli_func("CreateParameter", {parametertype: specs})
+    return nestkernel.llapi_create_parameter({parametertype: specs})
 
 
 class NodeCollectionIterator:
@@ -137,7 +154,8 @@ class NodeCollectionIterator:
         if self._increment > len(self._nc) - 1:
             raise StopIteration
 
-        val = sli_func("Take_g_a", self._nc._datum, [self._increment, self._increment + 1, 1])
+        index = self._increment + (self._increment >= 0)
+        val = nestkernel.llapi_slice(self._nc._datum, index, index, 1)
         self._increment += 1
         return val
 
@@ -190,20 +208,17 @@ class NodeCollection:
             6 in new_nc
     """
 
-    _datum = None
-
     def __init__(self, data=None):
         if data is None:
             data = []
-        if isinstance(data, kernel.SLIDatum):
-            if data.dtype != "nodecollectiontype":
-                raise TypeError("Need NodeCollection Datum.")
+
+        if isinstance(data, nestkernel.NodeCollectionObject):
             self._datum = data
         else:
             # Data from user, must be converted to datum
             # Data can be anything that can be converted to a NodeCollection,
             # such as list, tuple, etc.
-            nc = sli_func("cvnodecollection", data)
+            nc = nestkernel.llapi_make_nodecollection(data)
             self._datum = nc._datum
 
     def __iter__(self):
@@ -211,33 +226,39 @@ class NodeCollection:
 
     def __add__(self, other):
         if not isinstance(other, NodeCollection):
-            raise NotImplementedError()
+            if isinstance(other, numbers.Number) and other == 0:
+                other = NodeCollection()
+            else:
+                raise TypeError(f"Cannot add object of type '{type(other).__name__}' to 'NodeCollection'")
 
-        return sli_func("join", self._datum, other._datum)
+        return nestkernel.llapi_join_nc(self._datum, other._datum)
+
+    def __radd__(self, other):
+        return self + other
 
     def __getitem__(self, key):
         if isinstance(key, slice):
             if key.start is None:
-                start = 0
+                start = 1
             else:
-                start = key.start
+                start = key.start + 1 if key.start >= 0 else key.start
                 if abs(start) > self.__len__():
                     raise IndexError("slice start value outside of the NodeCollection")
             if key.stop is None:
                 stop = self.__len__()
             else:
-                stop = key.stop
+                stop = key.stop if key.stop > 0 else key.stop - 1
                 if abs(stop) > self.__len__():
                     raise IndexError("slice stop value outside of the NodeCollection")
             step = 1 if key.step is None else key.step
             if step < 1:
                 raise IndexError("slicing step for NodeCollection must be strictly positive")
 
-            return sli_func("Take_g_a", self._datum, [start, stop, step])
+            return nestkernel.llapi_slice(self._datum, start, stop, step)
         elif isinstance(key, (int, numpy.integer)):
-            if key >= self.__len__() or key + self.__len__() < 0:
+            if abs(key + (key >= 0)) > self.__len__():
                 raise IndexError("index value outside of the NodeCollection")
-            return sli_func("Take_g_a", self._datum, [key, key + 1, 1])
+            return self[key : key + 1 : 1]
         elif isinstance(key, (list, tuple)):
             if len(key) == 0:
                 return NodeCollection([])
@@ -247,13 +268,13 @@ class NodeCollection:
                     raise IndexError("Bool index array must be the same length as NodeCollection")
                 np_key = numpy.array(key, dtype=bool)
             # Checking that elements are not instances of bool too, because bool inherits from int
-            elif all(isinstance(x, int) and not isinstance(x, bool) for x in key):
+            elif all(isinstance(x, (int, numpy.integer)) and not isinstance(x, bool) for x in key):
                 np_key = numpy.array(key, dtype=numpy.uint64)
                 if len(numpy.unique(np_key)) != len(np_key):
                     raise ValueError("All node IDs in a NodeCollection have to be unique")
             else:
                 raise TypeError("Indices must be integers or bools")
-            return take_array_index(self._datum, np_key)
+            return nestkernel.llapi_take_array_index(self._datum, np_key)
         elif isinstance(key, numpy.ndarray):
             if len(key) == 0:
                 return NodeCollection([])
@@ -266,21 +287,18 @@ class NodeCollection:
                 raise IndexError("Bool index array must be the same length as NodeCollection")
             if not is_booltype and len(numpy.unique(key)) != len(key):
                 raise ValueError("All node IDs in a NodeCollection have to be unique")
-            return take_array_index(self._datum, key)
+            return nestkernel.llapi_take_array_index(self._datum, key)
         else:
             raise IndexError("only integers, slices, lists, tuples, and numpy arrays are valid indices")
 
     def __contains__(self, node_id):
-        return sli_func("InCollection", self._datum, node_id)
+        return nestkernel.llapi_nc_contains(self._datum, node_id)
 
     def __eq__(self, other):
         if not isinstance(other, NodeCollection):
             raise NotImplementedError("Cannot compare NodeCollection to {}".format(type(other).__name__))
 
-        if self.__len__() != other.__len__():
-            return False
-
-        return sli_func("eq", self, other)
+        return nestkernel.llapi_eq_nc(self._datum, other._datum)
 
     def __neq__(self, other):
         if not isinstance(other, NodeCollection):
@@ -289,13 +307,13 @@ class NodeCollection:
         return not self == other
 
     def __len__(self):
-        return sli_func("size", self._datum)
+        return nestkernel.llapi_nc_size(self._datum)
 
     def __str__(self):
-        return sli_func("pcvs", self._datum)
+        return nestkernel.llapi_to_string(self._datum)
 
     def __repr__(self):
-        return sli_func("pcvs", self._datum)
+        return self.__str__()
 
     def get(self, *params, **kwargs):
         """
@@ -312,7 +330,7 @@ class NodeCollection:
               This is for hierarchical addressing.
         output : str, ['pandas','json'], optional
              If the returned data should be in a Pandas DataFrame or in a
-             JSON serializable format.
+             JSON string format.
 
         Returns
         -------
@@ -339,8 +357,6 @@ class NodeCollection:
         See Also
         --------
         :py:func:`set`,
-        :py:func:`GetStatus()<nest.lib.hl_api_info.GetStatus>`,
-        :py:func:`SetStatus()<nest.lib.hl_api_info.SetStatus>`
 
         Examples
         --------
@@ -381,11 +397,17 @@ class NodeCollection:
         else:
             raise TypeError("Got unexpected keyword argument")
 
-        pandas_output = output == "pandas"
-
         if len(params) == 0:
             # get() is called without arguments
-            result = sli_func("get", self._datum)
+            result = nestkernel.llapi_get_nc_status(self._datum)
+
+            # For compatibility with NEST 3.9 and earlier, return scalars if only one node in node collection
+            if isinstance(result, dict) and len(self) == 1:
+                new_result = {}
+                for k, v in result.items():
+                    new_result[k] = v[0] if is_iterable(v) and len(v) == 1 and type(v) is not dict else v
+                result = new_result
+
         elif len(params) == 1:
             # params is a tuple with a string or list of strings
             result = get_parameters(self, params[0])
@@ -397,12 +419,12 @@ class NodeCollection:
             # Hierarchical addressing
             result = get_parameters_hierarchical_addressing(self, params)
 
-        if pandas_output:
+        if output == "pandas":
             index = self.get("global_id")
-            if len(params) == 1 and is_literal(params[0]):
+            if len(params) == 1 and isinstance(params[0], str):
                 # params is a string
                 result = {params[0]: result}
-            elif len(params) > 1 and is_literal(params[1]):
+            elif len(params) > 1 and isinstance(params[1], str):
                 # hierarchical, single string
                 result = {params[1]: result}
             if len(self) == 1:
@@ -417,8 +439,6 @@ class NodeCollection:
     def set(self, params=None, **kwargs):
         """
         Set the parameters of nodes to params.
-
-        NB! This is almost the same implementation as `SetStatus`.
 
         If `kwargs` is given, it has to be names and values of an attribute as keyword argument pairs. The values
         can be single values or list of the same size as the `NodeCollection`.
@@ -441,8 +461,6 @@ class NodeCollection:
         See Also
         --------
         :py:func:`get`,
-        :py:func:`SetStatus()<nest.lib.hl_api_info.SetStatus>`,
-        :py:func:`GetStatus()<nest.lib.hl_api_info.GetStatus>`
         """
 
         if not self:
@@ -487,10 +505,10 @@ class NodeCollection:
                             temp_dict[key] = vals[i]
                 params = temp_param
 
-        if isinstance(params, (list, tuple)) and self.__len__() != len(params):
-            raise TypeError("status dict must be a dict, or a list of dicts of length {} ".format(self.__len__()))
+        if isinstance(params, dict):
+            params = [params]
 
-        sli_func("SetStatus", self._datum, params)
+        nestkernel.llapi_set_nc_status(self._datum, params)
 
     def tolist(self):
         """
@@ -500,6 +518,40 @@ class NodeCollection:
             return []
 
         return list(self.get("global_id")) if len(self) > 1 else [self.get("global_id")]
+
+    def _to_array(self, selection="all"):
+        """
+        Debugging helper to extract GIDs from node collections.
+
+        `selection` can be `"all"`, `"rank"` or `"thread"` and extracts either all
+        nodes or those on the rank or thread on which it is executed. For `"thread"`,
+        separate lists are returned for all local threads independently.
+        """
+
+        res = nestkernel.llapi_node_collection_to_array(self._datum, selection)
+
+        if selection == "all":
+            return {"All": res}
+        elif selection == "rank":
+            return {f"Rank {Rank()}": res}
+        elif selection == "thread":
+            t_res = {}
+            thr = None
+            ix = 0
+            while ix < len(res):
+                while ix < len(res) and res[ix] != 0:
+                    t_res[thr].append(res[ix])
+                    ix += 1
+                assert ix == len(res) or ix + 3 <= len(res)
+                if ix < len(res):
+                    assert res[ix] == 0 and res[ix + 2] == 0
+                    thr = res[ix + 1]
+                    assert thr not in t_res
+                    t_res[thr] = []
+                    ix += 3
+            return t_res
+        else:
+            return res
 
     def index(self, node_id):
         """
@@ -515,7 +567,7 @@ class NodeCollection:
         ValueError
             If the node ID is not in the `NodeCollection`.
         """
-        index = sli_func("Find", self._datum, node_id)
+        index = nestkernel.llapi_nc_find(self._datum, node_id)
 
         if index == -1:
             raise ValueError("{} is not in NodeCollection".format(node_id))
@@ -526,16 +578,24 @@ class NodeCollection:
         """Converts the NodeCollection to a bool. False if it is empty, True otherwise."""
         return len(self) > 0
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=_ARRAY_COPY_DEFAULT):
         """Convert the NodeCollection to a NumPy array."""
-        return numpy.array(self.tolist(), dtype=dtype)
+
+        return numpy.array(self.tolist(), dtype=dtype, copy=copy)
 
     def __getattr__(self, attr):
         if not self:
             raise AttributeError("Cannot get attribute of empty NodeCollection")
 
+        # IPython looks up this method when doing pretty printing
+        # As long as we do not provide special methods to support IPython prettyprinting,
+        # HTML-rendering, etc, we stop IPython from time-consuming checks by raising an
+        # exception here. The exception must *not* be AttributeError.
+        if attr == "_ipython_canary_method_should_not_exist_":
+            raise NotImplementedError("_ipython_canary_method_should_not_exist_")
+
         if attr == "spatial":
-            metadata = sli_func("GetMetadata", self._datum)
+            metadata = nestkernel.llapi_get_nc_metadata(self._datum)
             val = metadata if metadata else None
             super().__setattr__(attr, val)
             return self.spatial
@@ -590,16 +650,16 @@ class SynapseCollection:
     def __init__(self, data):
         if isinstance(data, list):
             for datum in data:
-                if not isinstance(datum, kernel.SLIDatum) or datum.dtype != "connectiontype":
-                    raise TypeError("Expected Connection Datum.")
+                if not isinstance(datum, nestkernel.ConnectionObject):
+                    raise TypeError("Expected ConnectionObject.")
             self._datum = data
         elif data is None:
             # We can have an empty SynapseCollection if there are no connections.
             self._datum = data
         else:
-            if not isinstance(data, kernel.SLIDatum) or data.dtype != "connectiontype":
-                raise TypeError("Expected Connection Datum.")
-            # self._datum needs to be a list of Connection datums.
+            if not isinstance(data, nestkernel.ConnectionObject):
+                raise TypeError("Expected ConnectionObject.")
+            # self._datum needs to be a list of ConnectionObjects.
             self._datum = [data]
 
         self.print_full = False
@@ -700,12 +760,12 @@ class SynapseCollection:
 
         # 35 is arbitrarily chosen.
         if len(srcs) >= MAX_SIZE_FULL_PRINT and not self.print_full:
-            # u'\u22EE ' is the unicode for vertical ellipsis, used when we have many connections
-            srcs = srcs[:15] + ["\u22EE "] + srcs[-15:]
-            trgt = trgt[:15] + ["\u22EE "] + trgt[-15:]
-            wght = wght[:15] + ["\u22EE "] + wght[-15:]
-            dlay = dlay[:15] + ["\u22EE "] + dlay[-15:]
-            s_model = s_model[:15] + ["\u22EE "] + s_model[-15:]
+            # u'\u22ee ' is the unicode for vertical ellipsis, used when we have many connections
+            srcs = srcs[:15] + ["\u22ee "] + srcs[-15:]
+            trgt = trgt[:15] + ["\u22ee "] + trgt[-15:]
+            wght = wght[:15] + ["\u22ee "] + wght[-15:]
+            dlay = dlay[:15] + ["\u22ee "] + dlay[-15:]
+            s_model = s_model[:15] + ["\u22ee "] + s_model[-15:]
 
         headers = f"{src_h:^{src_len}} {trg_h:^{trg_len}} {sm_h:^{sm_len}} {w_h:^{w_len}} {d_h:^{d_len}}" + "\n"
         borders = (
@@ -718,7 +778,7 @@ class SynapseCollection:
 
     def __getattr__(self, attr):
         if attr == "distance":
-            dist = sli_func("Distance", self._datum)
+            dist = nestkernel.llapi_distance(self._datum)
             super().__setattr__(attr, dist)
             return self.distance
 
@@ -763,7 +823,7 @@ class SynapseCollection:
             belonging to the given `keys`.
         output : str, ['pandas','json'], optional
             If the returned data should be in a Pandas DataFrame or in a
-            JSON serializable format.
+            JSON string format.
 
         Returns
         -------
@@ -803,37 +863,40 @@ class SynapseCollection:
                {'source': [1, 1, 1, 2, 2, 2, 3, 3, 3],
                 'weight': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}
         """
+
         pandas_output = output == "pandas"
         if pandas_output and not HAVE_PANDAS:
             raise ImportError("Pandas could not be imported")
 
-        # Return empty dictionary if we have no connections or if we have done a nest.ResetKernel()
-        num_conns = GetKernelStatus("num_connections")  # Has to be called first because it involves MPI communication.
-        if self.__len__() == 0 or num_conns == 0:
-            # Return empty tuple if get is called with an argument
-            return {} if keys is None else ()
+        # Return empty dictionary if we have no connections
+        # We also return if the network is empty after a ResetKernel.
+        # This avoids problems with invalid SynapseCollections.
+        # See also #3100.
+        if self.__len__() == 0 or GetKernelStatus("network_size") == 0:
+            if pandas_output:
+                return pandas.DataFrame()
+            elif output == "json":
+                return to_json({})
+            else:
+                # Return empty tuple if get is called with an argument
+                return {} if keys is None else ()
 
         if keys is None:
-            cmd = "GetStatus"
-        elif is_literal(keys):
+            result = nestkernel.llapi_get_connection_status(self._datum)
+        elif isinstance(keys, str):
             #  Extracting the correct values will be done in restructure_data below
-            cmd = "GetStatus"
+            result = nestkernel.llapi_get_connection_status(self._datum)
         elif is_iterable(keys):
-            keys_str = " ".join("/{0}".format(x) for x in keys)
-            cmd = "GetStatus {{ [ [ {0} ] ] get }} Map".format(keys_str)
+            result = [[d[key] for key in keys] for d in nestkernel.llapi_get_connection_status(self._datum)]
         else:
             raise TypeError("keys should be either a string or an iterable")
-
-        sps(self._datum)
-        sr(cmd)
-        result = spp()
 
         # Need to restructure the data.
         final_result = restructure_data(result, keys)
 
         if pandas_output:
             index = self.get("source") if self.__len__() > 1 else (self.get("source"),)
-            if is_literal(keys):
+            if isinstance(keys, str):
                 final_result = {keys: final_result}
             final_result = pandas.DataFrame(final_result, index=index)
         elif output == "json":
@@ -844,8 +907,6 @@ class SynapseCollection:
     def set(self, params=None, **kwargs):
         """
         Set the parameters of the connections to `params`.
-
-        NB! This is almost the same implementation as SetStatus
 
         If `kwargs` is given, it has to be names and values of an attribute as keyword argument pairs. The values
         can be single values or list of the same size as the `SynapseCollection`.
@@ -872,12 +933,14 @@ class SynapseCollection:
 
         # This was added to ensure that the function is a nop (instead of,
         # for instance, raising an exception) when applied to an empty
-        # SynapseCollection, or after having done a nest.ResetKernel().
+        # SynapseCollection. We also return if the network is empty after a
+        # reset kernel. This avoids problems with invalid SynapseCollections.
+        # See also #3100.
         if self.__len__() == 0 or GetKernelStatus("network_size") == 0:
             return
 
         if isinstance(params, (list, tuple)) and self.__len__() != len(params):
-            raise TypeError("status dict must be a dict, or a list of dicts of length {}".format(self.__len__()))
+            raise TypeError(f"Status dict must be a dict, or a list of dicts of length {self.__len__()}")
 
         if kwargs and params is None:
             params = kwargs
@@ -885,13 +948,18 @@ class SynapseCollection:
             raise TypeError("must either provide params or kwargs, but not both.")
 
         if isinstance(params, dict):
-            node_params = self[0].get()
+            conn_params = self[0].get()
             contains_list = [
-                is_iterable(vals) and key in node_params and not is_iterable(node_params[key])
+                is_iterable(vals) and key in conn_params and not is_iterable(conn_params[key])
                 for key, vals in params.items()
             ]
 
             if any(contains_list):
+                if NumProcesses() > 1:
+                    raise NotImplementedError(
+                        "Passing lists of synapse parameter values is not supported in MPI-parallel simulations."
+                    )
+
                 temp_param = [{} for _ in range(self.__len__())]
 
                 for key, vals in params.items():
@@ -903,20 +971,13 @@ class SynapseCollection:
                             temp_dict[key] = vals[i]
                 params = temp_param
 
-        params = broadcast(params, self.__len__(), (dict,), "params")
-
-        sps(self._datum)
-        sps(params)
-
-        sr("2 arraystore")
-        sr("Transpose { arrayload pop SetStatus } forall")
+        nestkernel.llapi_set_connection_status(self._datum, params)
 
     def disconnect(self):
         """
         Disconnect the connections in the `SynapseCollection`.
         """
-        sps(self._datum)
-        sr("Disconnect_a")
+        nestkernel.llapi_disconnect_syncoll(self._datum)
 
 
 class CollocatedSynapses:
@@ -929,6 +990,7 @@ class CollocatedSynapses:
     -------
 
     ::
+
         nodes = nest.Create('iaf_psc_alpha', 3)
         syn_spec = nest.CollocatedSynapses({'weight': 4., 'delay': 1.5},
                                        {'synapse_model': 'stdp_synapse'},
@@ -939,6 +1001,7 @@ class CollocatedSynapses:
 
         print(conns.alpha)
         print(len(syn_spec))
+
     """
 
     def __init__(self, *args):
@@ -958,29 +1021,27 @@ class Mask:
     the :py:func:`.CreateMask` command.
     """
 
-    _datum = None
-
     # The constructor should not be called by the user
-    def __init__(self, datum):
+    def __init__(self, data):
         """Masks must be created using the CreateMask command."""
-        if not isinstance(datum, kernel.SLIDatum) or datum.dtype != "masktype":
-            raise TypeError("expected mask Datum")
-        self._datum = datum
-
-    # Generic binary operation
-    def _binop(self, op, rhs):
-        if not isinstance(rhs, Mask):
-            raise NotImplementedError()
-        return sli_func(op, self._datum, rhs._datum)
+        if not isinstance(data, nestkernel.MaskObject):
+            raise TypeError("Expected MaskObject.")
+        self._datum = data
 
     def __or__(self, rhs):
-        return self._binop("or", rhs)
+        if not isinstance(rhs, Mask):
+            raise NotImplementedError("Both operands of | must be masks.")
+        return nestkernel.llapi_union_mask(self._datum, rhs._datum)
 
     def __and__(self, rhs):
-        return self._binop("and", rhs)
+        if not isinstance(rhs, Mask):
+            raise NotImplementedError("Both operands of & must be masks.")
+        return nestkernel.llapi_intersect_mask(self._datum, rhs._datum)
 
     def __sub__(self, rhs):
-        return self._binop("sub", rhs)
+        if not isinstance(rhs, Mask):
+            raise NotImplementedError("Both operands of - must be masks.")
+        return nestkernel.llapi_minus_mask(self._datum, rhs._datum)
 
     def Inside(self, point):
         """
@@ -996,9 +1057,10 @@ class Mask:
         out : bool
             True if the point is inside the mask, False otherwise
         """
-        return sli_func("Inside", point, self._datum)
+        return nestkernel.llapi_inside_mask(point, self._datum)
 
 
+# PYNEST-NG-FUTURE: We may consider moving the entire (or most of) Parameter class to the cython level.
 class Parameter:
     """
     Class for parameters
@@ -1013,30 +1075,28 @@ class Parameter:
     # The constructor should not be called by the user
     def __init__(self, datum):
         """Parameters must be created using the CreateParameter command."""
-        if not isinstance(datum, kernel.SLIDatum) or datum.dtype != "parametertype":
-            raise TypeError("expected parameter datum")
+        if not isinstance(datum, nestkernel.ParameterObject):
+            raise TypeError(
+                "Expected low-level parameter object; use the 'CreateParameter()' function to create a 'Parameter'."
+            )
         self._datum = datum
 
-    # Generic binary operation
-    def _binop(self, op, rhs, params=None):
-        if isinstance(rhs, (int, float)):
-            rhs = CreateParameter("constant", {"value": float(rhs)})
-        if not isinstance(rhs, Parameter):
-            raise NotImplementedError()
+    def _arg_as_parameter(self, arg):
+        if isinstance(arg, Parameter):
+            return arg
+        if isinstance(arg, (int, float)):
+            # Value for the constant parameter must be float.
+            return CreateParameter("constant", {"value": float(arg)})
+        raise NotImplementedError()
 
-        if params is None:
-            return sli_func(op, self._datum, rhs._datum)
-        else:
-            return sli_func(op, self._datum, rhs._datum, params)
-
-    def __add__(self, rhs):
-        return self._binop("add", rhs)
+    def __add__(self, other):
+        return nestkernel.llapi_add_parameter(self._datum, self._arg_as_parameter(other)._datum)
 
     def __radd__(self, lhs):
         return self + lhs
 
-    def __sub__(self, rhs):
-        return self._binop("sub", rhs)
+    def __sub__(self, other):
+        return nestkernel.llapi_subtract_parameter(self._datum, self._arg_as_parameter(other)._datum)
 
     def __rsub__(self, lhs):
         return self * (-1) + lhs
@@ -1047,47 +1107,38 @@ class Parameter:
     def __neg__(self):
         return self * (-1)
 
-    def __mul__(self, rhs):
-        return self._binop("mul", rhs)
+    def __mul__(self, other):
+        return nestkernel.llapi_multiply_parameter(self._datum, self._arg_as_parameter(other)._datum)
 
     def __rmul__(self, lhs):
         return self * lhs
 
-    def __truediv__(self, rhs):
-        return self._binop("div", rhs)
+    def __truediv__(self, other):
+        return nestkernel.llapi_divide_parameter(self._datum, self._arg_as_parameter(other)._datum)
 
     def __rtruediv__(self, lhs):
-        rhs_inv = CreateParameter("constant", {"value": 1 / float(self.GetValue())})
-        return rhs_inv._binop("mul", lhs)
+        return self**-1 * lhs
 
     def __pow__(self, exponent):
-        try:
-            expo = float(exponent)
-        except TypeError:
-            raise TypeError("unsupported operand type for **: only int and float allow as exponent")
+        return nestkernel.llapi_pow_parameter(self._datum, float(exponent))
 
-        return sli_func("pow", self._datum, float(exponent))
+    def __lt__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 0})
 
-    def __rpow__(self, lhs):
-        raise TypeError("unsupported operand type for **: only int and float allow as exponent")
+    def __le__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 1})
 
-    def __lt__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 0})
+    def __eq__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 2})
 
-    def __le__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 1})
+    def __ne__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 3})
 
-    def __eq__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 2})
+    def __ge__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 4})
 
-    def __ne__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 3})
-
-    def __ge__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 4})
-
-    def __gt__(self, rhs):
-        return self._binop("compare", rhs, {"comparator": 5})
+    def __gt__(self, other):
+        return nestkernel.llapi_compare_parameter(self._datum, self._arg_as_parameter(other)._datum, {"comparator": 5})
 
     def GetValue(self):
         """
@@ -1114,14 +1165,14 @@ class Parameter:
                 # get out value
                 P.GetValue()
         """
-        return sli_func("GetValue", self._datum)
+        return nestkernel.llapi_get_param_value(self._datum)
 
     def is_spatial(self):
-        return sli_func("ParameterIsSpatial", self._datum)
+        return nestkernel.llapi_param_is_spatial(self._datum)
 
     def apply(self, spatial_nc, positions=None):
         if positions is None:
-            return sli_func("Apply", self._datum, spatial_nc)
+            return nestkernel.llapi_apply_parameter(self._datum, spatial_nc)
         else:
             if len(spatial_nc) != 1:
                 raise ValueError("The NodeCollection must contain a single node ID only")
@@ -1132,13 +1183,15 @@ class Parameter:
                     raise TypeError("Each position must be a list or tuple")
                 if len(pos) != len(positions[0]):
                     raise ValueError("All positions must have the same number of dimensions")
-            return sli_func("Apply", self._datum, {"source": spatial_nc, "targets": positions})
+            return nestkernel.llapi_apply_parameter(self._datum, {"source": spatial_nc, "targets": positions})
 
 
 class CmBase:
     def __init__(self, node_collection, elements):
         if not isinstance(node_collection, NodeCollection):
             raise TypeError(f"node_collection must be a NodeCollection, got {type(node_collection)}")
+        if isinstance(elements, list):
+            elements = tuple(elements)
         if not isinstance(elements, tuple):
             raise TypeError(f"elements must be a tuple of dicts, got {type(elements)}")
         self._elements = elements
@@ -1183,7 +1236,6 @@ class CmBase:
                 f" or other {self.__class__.__name__}, got {type(other)}"
             )
         self._node_collection.set({f"add_{self.__class__.__name__.lower()}": new_elements})
-        # implicit `return None` to flag elements as added by returning None
 
     def __getitem__(self, key):
         return self._elements[key]
@@ -1205,8 +1257,8 @@ class Receptors(CmBase):
     pass
 
 
-def serializable(data):
-    """Make data serializable for JSON.
+def serialize_data(data):
+    """Serialize data for JSON.
 
     Parameters
     ----------
@@ -1219,22 +1271,27 @@ def serializable(data):
     """
 
     if isinstance(data, (numpy.ndarray, NodeCollection)):
-        return data.tolist()
-    if isinstance(data, SynapseCollection):
+        return serialize_data(data.tolist())
+    elif isinstance(data, (numpy.integer)):
+        return int(data)
+    elif isinstance(data, SynapseCollection):
         # Get full information from SynapseCollection
-        return serializable(data.get())
-    if isinstance(data, kernel.SLILiteral):
-        # Get name of SLILiteral.
-        return data.name
+        return serialize_data(data.get())
+    elif isinstance(data, numpy.floating):
+        return float(data)
+    elif isinstance(data, numpy.integer):
+        return int(data)
+    elif isinstance(data, numpy.bool_):
+        return bool(data)
     if isinstance(data, (list, tuple)):
-        return [serializable(d) for d in data]
+        return [serialize_data(d) for d in data]
     if isinstance(data, dict):
-        return dict([(key, serializable(value)) for key, value in data.items()])
+        return dict([(serialize_data(key), serialize_data(value)) for key, value in data.items()])
     return data
 
 
 def to_json(data, **kwargs):
-    """Serialize data to JSON.
+    """Convert the object to a JSON string.
 
     Parameters
     ----------
@@ -1245,9 +1302,9 @@ def to_json(data, **kwargs):
     Returns
     -------
     data_json : str
-        JSON format of the data
+        JSON string format of the data
     """
 
-    data_serialized = serializable(data)
+    data_serialized = serialize_data(data)
     data_json = json.dumps(data_serialized, **kwargs)
     return data_json

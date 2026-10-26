@@ -49,21 +49,16 @@ where `alpha`, `beta` and `gamma` are weighting factors, and stars indicate
 target values.
 
 The network contains an excitatory and an inhibitory population on
-the basis of the network used in [1]_.
+the basis of the network used in :footcite:p:`Brunel2000`.
 
 The optimization algorithm (evolution strategies) is described in
-Wierstra et al. [2]_.
+Wierstra et al. :footcite:p:`Wierstra2014`.
 
 
 References
 ~~~~~~~~~~~~
 
-.. [1] Brunel N (2000). Dynamics of Sparsely Connected Networks of
-       Excitatory and Inhibitory Spiking Neurons. Journal of Computational
-       Neuroscience 8, 183-208.
-
-.. [2] Wierstra et al. (2014). Natural evolution strategies. Journal of
-       Machine Learning Research, 15(1), 949-980.
+.. footbibliography::
 
 See Also
 ~~~~~~~~~~
@@ -77,10 +72,10 @@ Jakob Jordan
 """
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
+import nest
 import numpy as np
 import scipy.special as sp
-import nest
+from matplotlib.patches import Ellipse
 
 ###############################################################################
 # Analysis
@@ -223,7 +218,7 @@ def simulate(parameters):
     p_rate = 1000.0 * nu_ex * CE
 
     nest.ResetKernel()
-    nest.set_verbosity("M_FATAL")
+    nest.verbosity = nest.VerbosityLevel.FATAL
 
     nest.rng_seed = parameters["seed"]
     nest.resolution = parameters["dt"]
@@ -390,7 +385,7 @@ def optimize(
             s = np.vstack([s, -s])
 
         # evaluate fitness for every individual in population
-        fitness = np.fromiter((func(*zi) for zi in z), np.float)
+        fitness = np.fromiter((func(*zi) for zi in z), float)
 
         # print status if enabled
         if verbosity > 0:

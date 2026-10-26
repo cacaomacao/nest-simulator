@@ -89,7 +89,7 @@ changes must be a multiple of the time step.
 
    You can use a :doc:`multimeter <multimeter>` to record the average current sent to all targets for each time step
    if simulating on a single thread; multiple MPI processes with one thread each also work. In this case,
-   the recording interval of the multimeter should be the equal to the simulation resolution to avoid confusing effects
+   the recording interval of the multimeter should be equal to the simulation resolution to avoid confusing effects
    due to offset or drift between the recording times of the multimeter and the switching times of the
    noise generator. In multi-threaded mode, recording of noise currents is prohibited for technical reasons.
 
@@ -139,7 +139,14 @@ See also
 
 step_current_generator
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: noise_generator
+
 EndUserDocs */
+
+void register_noise_generator( const std::string& name );
 
 class noise_generator : public StimulationDevice
 {
@@ -162,16 +169,16 @@ public:
   using Node::handles_test_event;
   using Node::sends_signal;
 
-  port send_test_event( Node&, rport, synindex, bool ) override;
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
   SignalType sends_signal() const override;
 
   void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( DataLoggingRequest&, rport ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
   void calibrate_time( const TimeConverter& tc ) override;
 
@@ -200,12 +207,12 @@ private:
    */
   struct Parameters_
   {
-    double mean_;    //!< mean current, in pA
-    double std_;     //!< standard deviation of current, in pA
-    double std_mod_; //!< standard deviation of current modulation, in pA
-    double freq_;    //!< Standard frequency in Hz
-    double phi_deg_; //!< Phase of sinusodial noise modulation (0-360 deg)
-    Time dt_;        //!< time interval between updates
+    double mean_;     //!< mean current, in pA
+    double std_;      //!< standard deviation of current, in pA
+    double std_mod_;  //!< standard deviation of current modulation, in pA
+    double freq_;     //!< Standard frequency in Hz
+    double phi_deg_;  //!< Phase of sinusodial noise modulation (0-360 deg)
+    Time dt_;         //!< time interval between updates
 
     /**
      * Number of targets.
@@ -215,13 +222,13 @@ private:
      */
     size_t num_targets_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
     Parameters_( const Parameters_& );
     Parameters_& operator=( const Parameters_& p );
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
     //! Set values from dictionary
-    void set( const DictionaryDatum&, const noise_generator&, Node* node );
+    void set( const Dictionary&, const noise_generator&, Node* node );
 
     Time get_default_dt();
   };
@@ -232,12 +239,12 @@ private:
   {
     double y_0_;
     double y_1_;
-    double I_avg_; //!< Average of instantaneous currents computed
-                   //!< Used for recording current
+    double I_avg_;  //!< Average of instantaneous currents computed
+                    //!< Used for recording current
 
-    State_(); //!< Sets default parameter values
+    State_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
   };
 
   // ------------------------------------------------------------
@@ -250,8 +257,8 @@ private:
 
   struct Buffers_
   {
-    long next_step_; //!< time step of next change in current
-    AmpVec_ amps_;   //!< amplitudes, one per target
+    long next_step_;  //!< time step of next change in current
+    AmpVec_ amps_;    //!< amplitudes, one per target
     explicit Buffers_( noise_generator& );
     Buffers_( const Buffers_&, noise_generator& );
     UniversalDataLogger< noise_generator > logger_;
@@ -261,11 +268,11 @@ private:
 
   struct Variables_
   {
-    normal_distribution normal_dist_; //!< normal distribution
+    normal_distribution normal_dist_;  //!< normal distribution
 
-    long dt_steps_;  //!< update interval in steps
-    double omega_;   //!< frequency [radian/s]
-    double phi_rad_; //!< phase of sine current (0-2Pi rad)
+    long dt_steps_;   //!< update interval in steps
+    double omega_;    //!< frequency [radian/s]
+    double phi_rad_;  //!< phase of sine current (0-2Pi rad)
 
     // The exact integration matrix
     double A_00_;
@@ -290,8 +297,8 @@ private:
   Variables_ V_;
 };
 
-inline port
-noise_generator::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+noise_generator::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( kernel().vp_manager.get_num_threads() > 1 )
   {
@@ -306,21 +313,21 @@ noise_generator::handles_test_event( DataLoggingRequest& dlr, rport receptor_typ
 }
 
 inline void
-noise_generator::get_status( DictionaryDatum& d ) const
+noise_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
   StimulationDevice::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-noise_generator::set_status( const DictionaryDatum& d )
+noise_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_;               // temporary copy in case of errors
-  ptmp.num_targets_ = P_.num_targets_; // Copy Constr. does not copy connections
-  ptmp.set( d, *this, this );          // throws if BadProperty
+  Parameters_ ptmp = P_;                // temporary copy in case of errors
+  ptmp.num_targets_ = P_.num_targets_;  // Copy Constr. does not copy connections
+  ptmp.set( d, *this, this );           // throws if BadProperty
 
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
@@ -356,6 +363,6 @@ noise_generator::Parameters_::get_default_dt()
   return 10 * Time::get_resolution();
 }
 
-} // namespace
+}  // namespace
 
-#endif // NOISE_GENERATOR_H
+#endif  // NOISE_GENERATOR_H

@@ -20,8 +20,8 @@
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Convergent projection and rectangular mask, from target perspective
--------------------------------------------------------------------
+Spatial networks: Convergent projection and rectangular mask, from target perspective
+-------------------------------------------------------------------------------------
 
 Create two populations of iaf_psc_alpha neurons on a 30x30 grid
 
@@ -32,12 +32,12 @@ BCCN Tutorial @ CNS*09
 Hans Ekkehard Plesser, UMB
 """
 
-import nest
 import matplotlib.pyplot as plt
+import nest
 import numpy as np
 
 nest.ResetKernel()
-nest.set_verbosity("M_WARNING")
+nest.verbosity = nest.VerbosityLevel.WARNING
 
 pos = nest.spatial.grid(shape=[30, 30], extent=[3.0, 3.0], edge_wrap=True)
 

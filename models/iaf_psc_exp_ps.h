@@ -43,7 +43,7 @@
 namespace nest
 {
 
-/* BeginUserDocs: neuron, integrate-and-fire, current-based, precise
+/* BeginUserDocs: neuron, integrate-and-fire, current-based, precise, hard threshold
 
 Short description
 +++++++++++++++++
@@ -62,7 +62,7 @@ crossing. This is the most exact implementation available.
 
 The canonical implementation handles neuronal dynamics in a locally
 event-based manner with in coarse time grid defined by the minimum
-delay in the network, see [1]_ [2]_. Incoming spikes are applied at the
+delay in the network, see :footcite:p:`Morrison2007a` :footcite:p:`Hanuschkin2010`. Incoming spikes are applied at the
 precise moment of their arrival, while the precise time of outgoing
 spikes is determined by regula falsi once a threshold crossing has
 been detected. Return from refractoriness occurs precisely at spike
@@ -72,9 +72,9 @@ This implementation is more complex than the plain iaf_psc_exp
 neuron, but achieves much higher precision. In particular, it does not
 suffer any binning of spike times to grid points. Depending on your
 application, the canonical application with regula falsi may provide
-superior overall performance given an accuracy goal; see [1]_ [2]_ for
+superior overall performance given an accuracy goal; see :footcite:p:`Morrison2007a` :footcite:p:`Hanuschkin2010` for
 details. Subthreshold dynamics are integrated using exact integration
-between events [3]_.
+between events :footcite:p:`Rotter1999`.
 
 Please note that this node is capable of sending precise spike times
 to target nodes (on-grid spike time and offset).
@@ -90,7 +90,7 @@ can only change at on-grid times.
   `tau_syn_in`, respectively, to avoid numerical instabilities.
 
   For implementation details see the
-  `IAF_neurons_singularity <../model_details/IAF_neurons_singularity.ipynb>`_ notebook.
+  `IAF Integration Singularity notebook <../model_details/IAF_Integration_Singularity.ipynb>`_.
 
 For details about exact subthreshold integration, please see
 :doc:`../neurons/exact-integration`.
@@ -116,14 +116,7 @@ V_reset     mV     Reset value for the membrane potential
 References
 ++++++++++
 
-.. [1] Morrison A, Straube S, Plesser HE & Diesmann M (2007) Exact subthreshold
-       integration with continuous spike times in discrete time neural network
-       simulations. Neural Comput 19, 47-79
-.. [2] Hanuschkin A, Kunkel S, Helias M, Morrison A and Diesmann M (2010) A
-       general and efficient method for incorporating precise spike times in
-       globally timedriven simulations. Front Neuroinform 4:113
-.. [3] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
-       systems with applications to neuronal modeling. Biol Cybern 81:381-402
+.. footbibliography::
 
 Sends
 +++++
@@ -140,7 +133,14 @@ See also
 
 iaf_psc_exp, iaf_psc_alpha_ps
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: iaf_psc_exp_ps
+
 EndUserDocs */
+
+void register_iaf_psc_exp_ps( const std::string& name );
 
 class iaf_psc_exp_ps : public ArchivingNode
 {
@@ -168,11 +168,11 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  port send_test_event( Node&, rport, synindex, bool ) override;
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  port handles_test_event( SpikeEvent&, rport ) override;
-  port handles_test_event( CurrentEvent&, rport ) override;
-  port handles_test_event( DataLoggingRequest&, rport ) override;
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
   void handle( SpikeEvent& ) override;
   void handle( CurrentEvent& ) override;
@@ -184,8 +184,8 @@ public:
     return true;
   }
 
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
   /**
    * Based on the current state, compute the value of the membrane potential
@@ -293,11 +293,11 @@ private:
     /** External DC current [pA] */
     double I_e_;
 
-    /** Threshold, RELATIVE TO RESTING POTENTAIL(!).
+    /** Threshold, RELATIVE TO RESTING POTENTIAL(!).
         I.e. the real threshold is U_th_ + E_L_. */
     double U_th_;
 
-    /** Lower bound, RELATIVE TO RESTING POTENTAIL(!).
+    /** Lower bound, RELATIVE TO RESTING POTENTIAL(!).
         I.e. the real lower bound is U_min_+E_L_. */
     double U_min_;
 
@@ -306,14 +306,14 @@ private:
         Relative to resting potential. */
     double U_reset_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /** Set values from dictionary.
      * @returns Change in reversal potential E_L, to be passed to State_::set()
      */
-    double set( const DictionaryDatum&, Node* node );
+    double set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -323,25 +323,25 @@ private:
    */
   struct State_
   {
-    double y0_;    //!< External input current
-    double y1_ex_; //!< Excitatory synaptic current
-    double y1_in_; //!< Inhibitory synaptic current
-    double y2_;    //!< Membrane potential (relative to resting potential)
+    double y0_;     //!< External input current
+    double y1_ex_;  //!< Excitatory synaptic current
+    double y1_in_;  //!< Inhibitory synaptic current
+    double y2_;     //!< Membrane potential (relative to resting potential)
 
-    bool is_refractory_;       //!< True while refractory
-    long last_spike_step_;     //!< Time stamp of most recent spike
-    double last_spike_offset_; //!< Offset of most recent spike
+    bool is_refractory_;        //!< True while refractory
+    long last_spike_step_;      //!< Time stamp of most recent spike
+    double last_spike_offset_;  //!< Offset of most recent spike
 
-    State_(); //!< Default initialization
+    State_();  //!< Default initialization
 
-    void get( DictionaryDatum&, const Parameters_& ) const;
+    void get( Dictionary&, const Parameters_& ) const;
 
     /** Set values from dictionary.
      * @param dictionary to take data from
      * @param current parameters
      * @param Change in reversal potential E_L specified by this dict
      */
-    void set( const DictionaryDatum&, const Parameters_&, double, Node* );
+    void set( const Dictionary&, const Parameters_&, double, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -372,18 +372,18 @@ private:
    */
   struct Variables_
   {
-    double h_ms_;           //!< Time resolution [ms]
-    long refractory_steps_; //!< Refractory time in steps
-    double expm1_tau_m_;    //!< expm1(-h/tau_m)
-    double exp_tau_ex_;     //!< exp(-h/tau_ex)
-    double exp_tau_in_;     //!< exp(-h/tau_in)
-    double P20_;            //!< Progagator matrix element, 2nd row
-    double P21_in_;         //!< Progagator matrix element, 2nd row
-    double P21_ex_;         //!< Progagator matrix element, 2nd row
-    double y0_before_;      //!< y0_ at beginning of ministep
-    double y1_ex_before_;   //!< y1_ at beginning of ministep
-    double y1_in_before_;   //!< y1_ at beginning of ministep
-    double y2_before_;      //!< y2_ at beginning of ministep
+    double h_ms_;            //!< Time resolution [ms]
+    long refractory_steps_;  //!< Refractory time in steps
+    double expm1_tau_m_;     //!< expm1(-h/tau_m)
+    double exp_tau_ex_;      //!< exp(-h/tau_ex)
+    double exp_tau_in_;      //!< exp(-h/tau_in)
+    double P20_;             //!< Progagator matrix element, 2nd row
+    double P21_in_;          //!< Progagator matrix element, 2nd row
+    double P21_ex_;          //!< Progagator matrix element, 2nd row
+    double y0_before_;       //!< y0_ at beginning of ministep
+    double y1_ex_before_;    //!< y1_ at beginning of ministep
+    double y1_in_before_;    //!< y1_ at beginning of ministep
+    double y2_before_;       //!< y2_ at beginning of ministep
   };
 
   // Access functions for UniversalDataLogger -------------------------------
@@ -398,7 +398,6 @@ private:
   // ----------------------------------------------------------------
 
   /**
-   * @defgroup iaf_psc_exp_ps_data
    * Instances of private data structures for the different types
    * of data pertaining to the model.
    * @note The order of definitions is important for speed.
@@ -414,16 +413,16 @@ private:
   static RecordablesMap< iaf_psc_exp_ps > recordablesMap_;
 };
 
-inline port
-nest::iaf_psc_exp_ps::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+iaf_psc_exp_ps::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
   return target.handles_test_event( e, receptor_type );
 }
 
-inline port
-iaf_psc_exp_ps::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+iaf_psc_exp_ps::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -432,8 +431,8 @@ iaf_psc_exp_ps::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-iaf_psc_exp_ps::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+iaf_psc_exp_ps::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -442,8 +441,8 @@ iaf_psc_exp_ps::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-iaf_psc_exp_ps::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+iaf_psc_exp_ps::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -453,22 +452,22 @@ iaf_psc_exp_ps::handles_test_event( DataLoggingRequest& dlr, rport receptor_type
 }
 
 inline void
-iaf_psc_exp_ps::get_status( DictionaryDatum& d ) const
+iaf_psc_exp_ps::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
   ArchivingNode::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-iaf_psc_exp_ps::set_status( const DictionaryDatum& d )
+iaf_psc_exp_ps::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_;                       // temporary copy in case of errors
-  const double delta_EL = ptmp.set( d, this ); // throws if BadProperty
-  State_ stmp = S_;                            // temporary copy in case of errors
-  stmp.set( d, ptmp, delta_EL, this );         // throws if BadProperty
+  Parameters_ ptmp = P_;                        // temporary copy in case of errors
+  const double delta_EL = ptmp.set( d, this );  // throws if BadProperty
+  State_ stmp = S_;                             // temporary copy in case of errors
+  stmp.set( d, ptmp, delta_EL, this );          // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
@@ -481,6 +480,6 @@ iaf_psc_exp_ps::set_status( const DictionaryDatum& d )
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // IAF_PSC_EXP_PS_H
+#endif  // IAF_PSC_EXP_PS_H

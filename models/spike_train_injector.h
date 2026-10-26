@@ -225,6 +225,11 @@ See also
 
 spike_generator
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: spike_train_injector
+
 EndUserDocs */
 
 /**
@@ -235,6 +240,8 @@ EndUserDocs */
  * @note Spikes emitted by a spike train injector neuron will be counted by
  * the local spike count.
  */
+void register_spike_train_injector( const std::string& name );
+
 class spike_train_injector : public Node, public Device
 {
 
@@ -242,9 +249,9 @@ public:
   spike_train_injector();
   spike_train_injector( const spike_train_injector& );
 
-  port send_test_event( Node&, rport, synindex, bool ) override;
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
   bool is_active( const Time& ) const override;
 
   bool
@@ -268,7 +275,7 @@ private:
   struct State_
   {
     State_();
-    size_t position_; //!< index of next spike to deliver
+    size_t position_;  //!< index of next spike to deliver
   };
 
   /**
@@ -294,11 +301,11 @@ private:
     //! Shift spike times at present to next step
     bool shift_now_spikes_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
     Parameters_( const Parameters_& ) = default;
     Parameters_& operator=( const Parameters_& ) = default;
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /**
      * Set values from dictionary.
@@ -306,7 +313,7 @@ private:
      *       spike_times_ vector has been filled with new data, or if
      *       the origin was reset.
      */
-    void set( const DictionaryDatum&, State_&, const Time&, const Time&, Node* node );
+    void set( const Dictionary&, State_&, const Time&, const Time&, Node* node );
 
     /**
      * Insert spike time to arrays, throw BadProperty for invalid spike times.
@@ -323,8 +330,8 @@ private:
 };
 
 
-inline port
-spike_train_injector::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+spike_train_injector::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
@@ -333,7 +340,7 @@ spike_train_injector::send_test_event( Node& target, rport receptor_type, synind
 
 
 inline void
-spike_train_injector::get_status( DictionaryDatum& d ) const
+spike_train_injector::get_status( Dictionary& d ) const
 {
   P_.get( d );
   Device::get_status( d );
@@ -341,15 +348,15 @@ spike_train_injector::get_status( DictionaryDatum& d ) const
 
 
 inline void
-spike_train_injector::set_status( const DictionaryDatum& d )
+spike_train_injector::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
 
   // To detect "now" spikes and shift them, we need the origin. In case
   // it is set in this call, we need to extract it explicitly here.
   Time origin;
   double v;
-  if ( updateValue< double >( d, names::origin, v ) )
+  if ( d.update_value( names::origin, v ) )
   {
     origin = Time::ms( v );
   }
@@ -370,5 +377,6 @@ spike_train_injector::set_status( const DictionaryDatum& d )
   P_ = ptmp;
 }
 
-} // namespace
-#endif // SPIKE_TRAIN_INJECTOR_H
+}  // namespace
+
+#endif  // SPIKE_TRAIN_INJECTOR_H

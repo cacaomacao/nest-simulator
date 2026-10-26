@@ -6,7 +6,7 @@ Install NEST from source
 
 .. note::
 
-    Please see our :ref:`development workflows and guidelines <developer_space>`, if you need
+    Please see our :ref:`development workflows and guidelines <contribute>`, if you need
     a refresher in git or need to review the coding or documentation guidelines.
 
 
@@ -29,15 +29,28 @@ Install NEST from source
 We have provided an `environment.yml <https://github.com/nest/nest-simulator/blob/master/environment.yml>`_
 file that contains all possible packages needed for NEST development.
 
-.. grid:: 2
+.. grid:: 3
 
-   .. grid-item-card:: Install NEST with conda
+   .. grid-item-card:: Install NEST with venv
+        :link: venv
+        :link-type: ref
 
-         See our instructions for installing NEST from source in a :ref:`conda environment <condaenv>`
+
+   .. grid-item-card:: Install NEST with mamba
+        :link: condaenv
+        :link-type: ref
+
 
    .. grid-item-card:: Install NEST without environment
+        :link: noenv
+        :link-type: ref
 
-         If you want to install NEST without any environment, see the :ref:`instructions here <noenv>`.
+
+
+
+.. seealso::
+
+  :ref:`cmake options for NEST <cmake_options>`
 
 What gets installed where
 -------------------------
@@ -47,13 +60,9 @@ By default, everything will be installed to the subdirectories ``<nest_install_d
 
 - Executables ``<nest_install_dir>/bin``
 - Dynamic libraries ``<nest_install_dir>/lib/``
-- SLI libraries ``<nest_install_dir>/share/nest/sli``
-- SLI documentation ``<nest_install_dir>/share/doc/nest``
 - Examples ``<nest_install_dir>/share/doc/nest/examples``
 - PyNEST ``<nest_install_dir>/lib/pythonX.Y/site-packages/nest``
 - PyNEST examples ``<nest_install_dir>/share/doc/nest/examples/pynest``
 
 If you want to run the ``nest`` executable or use the ``nest`` Python module without providing explicit paths, you
 have to add the installation directory to your search paths.
-
-

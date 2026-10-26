@@ -33,6 +33,7 @@ namespace nest
 {
 /**
  * Generic Model template.
+ *
  * The template GenericModel should be used
  * as base class for custom model classes. It already includes the
  * element factory functionality, as well as a pool based memory
@@ -57,24 +58,19 @@ public:
   Model* clone( const std::string& ) const override;
 
   bool has_proxies() override;
+  bool local_receiver() override;
   bool one_node_per_process() override;
   bool is_off_grid() override;
   void calibrate_time( const TimeConverter& tc ) override;
-  /**
-     @note The decision of whether one node can receive a certain
-     event was originally in the node. But in the distributed case,
-     it may be that you only have a proxy node and not he real
-     thing. Thus, you need to be able to make this decision without
-     having the node. Since the model now takes responsibility for a
-     lot of general node properties, it was a natural place to put
-     this function.
 
-     Model::send_test_event() is a forwarding function that calls
-     send_test_event() from the prototype. Since proxies know the
-     model they represent, they can now answer a call to check
-     connection by referring back to the model.
+  /**
+   * Send a test event to a target node.
+   *
+   * This is a forwarding function that calls Node::send_test_event() from the prototype.
+   * Since proxies know the model they represent, they can now answer a call to check
+   * connection by referring back to the model.
    */
-  port send_test_event( Node&, rport, synindex, bool ) override;
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
   void sends_secondary_event( GapJunctionEvent& ge ) override;
 
@@ -86,6 +82,10 @@ public:
 
   void sends_secondary_event( DelayedRateConnectionEvent& re ) override;
 
+  void sends_secondary_event( LearningSignalConnectionEvent& re ) override;
+
+  void sends_secondary_event( SICEvent& sic ) override;
+
   Node const& get_prototype() const override;
 
   void set_model_id( int ) override;
@@ -95,8 +95,8 @@ public:
   void deprecation_warning( const std::string& ) override;
 
 private:
-  void set_status_( DictionaryDatum ) override;
-  DictionaryDatum get_status_() override;
+  void set_status_( const Dictionary& ) override;
+  Dictionary get_status_() override;
 
   size_t get_element_size() const override;
 
@@ -115,9 +115,7 @@ private:
    */
   std::string deprecation_info_;
 
-  /**
-   * False until deprecation warning has been issued once
-   */
+  //! False until deprecation warning has been issued once
   bool deprecation_warning_issued_;
 };
 
@@ -166,6 +164,13 @@ GenericModel< ElementT >::has_proxies()
 
 template < typename ElementT >
 inline bool
+GenericModel< ElementT >::local_receiver()
+{
+  return proto_.local_receiver();
+}
+
+template < typename ElementT >
+inline bool
 GenericModel< ElementT >::one_node_per_process()
 {
   return proto_.one_node_per_process();
@@ -186,8 +191,8 @@ GenericModel< ElementT >::calibrate_time( const TimeConverter& tc )
 }
 
 template < typename ElementT >
-inline port
-GenericModel< ElementT >::send_test_event( Node& target, rport receptor, synindex syn_id, bool dummy_target )
+inline size_t
+GenericModel< ElementT >::send_test_event( Node& target, size_t receptor, synindex syn_id, bool dummy_target )
 {
   return proto_.send_test_event( target, receptor, syn_id, dummy_target );
 }
@@ -221,7 +226,21 @@ GenericModel< ElementT >::sends_secondary_event( DelayedRateConnectionEvent& re 
 }
 
 template < typename ElementT >
-inline nest::SignalType
+inline void
+GenericModel< ElementT >::sends_secondary_event( LearningSignalConnectionEvent& re )
+{
+  return proto_.sends_secondary_event( re );
+}
+
+template < typename ElementT >
+inline void
+GenericModel< ElementT >::sends_secondary_event( SICEvent& sic )
+{
+  return proto_.sends_secondary_event( sic );
+}
+
+template < typename ElementT >
+inline SignalType
 GenericModel< ElementT >::sends_signal() const
 {
   return proto_.sends_signal();
@@ -229,17 +248,17 @@ GenericModel< ElementT >::sends_signal() const
 
 template < typename ElementT >
 void
-GenericModel< ElementT >::set_status_( DictionaryDatum d )
+GenericModel< ElementT >::set_status_( const Dictionary& d )
 {
   proto_.set_status( d );
 }
 
 template < typename ElementT >
-DictionaryDatum
+Dictionary
 GenericModel< ElementT >::get_status_()
 {
-  DictionaryDatum d = proto_.get_status_base();
-  ( *d )[ names::elementsize ] = sizeof( ElementT );
+  Dictionary d = proto_.get_status_base();
+  d[ names::elementsize ] = static_cast< long >( sizeof( ElementT ) );
   return d;
 }
 

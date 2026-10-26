@@ -120,6 +120,11 @@ See also
 
 correlation_detector, correlomatrix_detector, spike_recorder
 
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: correlospinmatrix_detector
+
 EndUserDocs */
 
 /**
@@ -127,6 +132,8 @@ EndUserDocs */
  * follows: the internal buffers for storing spikes are part of
  * State_, but are initialized by init_buffers_().
  */
+
+void register_correlospinmatrix_detector( const std::string& name );
 
 class correlospinmatrix_detector : public Node
 {
@@ -145,7 +152,7 @@ public:
     return true;
   }
 
-  Name
+  std::string
   get_element_type() const override
   {
     return names::recorder;
@@ -162,12 +169,12 @@ public:
 
   void handle( SpikeEvent& ) override;
 
-  port handles_test_event( SpikeEvent&, rport ) override;
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
 
   SignalType receives_signal() const override;
 
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
   void calibrate_time( const TimeConverter& tc ) override;
 
@@ -215,25 +222,25 @@ private:
 
   struct Parameters_
   {
-    Time delta_tau_;  //!< width of correlation histogram bins
-    Time tau_max_;    //!< maximum time difference of events to detect
-    Time Tstart_;     //!< start of recording
-    Time Tstop_;      //!< end of recording
-    long N_channels_; //!< number of channels
+    Time delta_tau_;     //!< width of correlation histogram bins
+    Time tau_max_;       //!< maximum time difference of events to detect
+    Time Tstart_;        //!< start of recording
+    Time Tstop_;         //!< end of recording
+    size_t N_channels_;  //!< number of channels
 
-    Parameters_();                     //!< Sets default parameter values
-    Parameters_( const Parameters_& ); //!< Recalibrate all times
+    Parameters_();                      //!< Sets default parameter values
+    Parameters_( const Parameters_& );  //!< Recalibrate all times
 
     Parameters_& operator=( const Parameters_& );
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /**
      * Set values from dictionary.
      * @returns true if the state needs to be reset after a change of
      *          binwidth or tau_max.
      */
-    bool set( const DictionaryDatum&, const correlospinmatrix_detector&, Node* );
+    bool set( const Dictionary&, const correlospinmatrix_detector&, Node* );
 
     Time get_default_delta_tau();
   };
@@ -251,12 +258,12 @@ private:
    */
   struct State_
   {
-    BinaryPulselistType incoming_; //!< incoming binary pulses, sorted
-                                   /**
-                                    * rport of last event coming in
-                                    * (needed for decoding logic of binary events)
-                                    */
-    rport last_i_;
+    BinaryPulselistType incoming_;  //!< incoming binary pulses, sorted
+                                    /**
+                                     * rport of last event coming in
+                                     * (needed for decoding logic of binary events)
+                                     */
+    size_t last_i_;
     /**
      * time of last event coming in (needed for decoding logic of binary events)
      */
@@ -265,7 +272,7 @@ private:
     //! potentially a down transition (single spike received)
     bool tentative_down_;
 
-    std::vector< bool > curr_state_; //!< current state of neuron i
+    std::vector< bool > curr_state_;  //!< current state of neuron i
 
     //! last time pointof change of neuron i
     std::vector< long > last_change_;
@@ -274,14 +281,14 @@ private:
      */
     std::vector< std::vector< std::vector< long > > > count_covariance_;
 
-    State_(); //!< initialize default state
+    State_();  //!< initialize default state
 
-    void get( DictionaryDatum& ) const;
+    void get( Dictionary& ) const;
 
     /**
      * @param bool if true, force state reset
      */
-    void set( const DictionaryDatum&, const Parameters_&, bool, Node* );
+    void set( const Dictionary&, const Parameters_&, bool, Node* );
 
     void reset( const Parameters_& );
   };
@@ -293,10 +300,10 @@ private:
   State_ S_;
 };
 
-inline port
-correlospinmatrix_detector::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+correlospinmatrix_detector::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
-  if ( receptor_type < 0 or receptor_type > P_.N_channels_ - 1 )
+  if ( receptor_type > P_.N_channels_ - 1 )
   {
     throw UnknownReceptorType( receptor_type, get_name() );
   }
@@ -304,7 +311,7 @@ correlospinmatrix_detector::handles_test_event( SpikeEvent&, rport receptor_type
 }
 
 inline void
-correlospinmatrix_detector::get_status( DictionaryDatum& d ) const
+correlospinmatrix_detector::get_status( Dictionary& d ) const
 {
   device_.get_status( d );
   P_.get( d );
@@ -312,7 +319,7 @@ correlospinmatrix_detector::get_status( DictionaryDatum& d ) const
 }
 
 inline void
-correlospinmatrix_detector::set_status( const DictionaryDatum& d )
+correlospinmatrix_detector::set_status( const Dictionary& d )
 {
   Parameters_ ptmp = P_;
   const bool reset_required = ptmp.set( d, *this, this );
@@ -338,6 +345,6 @@ correlospinmatrix_detector::Parameters_::get_default_delta_tau()
   return Time::get_resolution();
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef CORRELOSPINMATRIX_DETECTOR_H */

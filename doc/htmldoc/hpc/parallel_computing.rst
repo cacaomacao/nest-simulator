@@ -48,7 +48,7 @@ Virtual processes
 We use the concept of local and remote threads, called *virtual processes*.
 A virtual process (VP) is a thread residing in one of NEST's :hxt_ref:`MPI` processes.
 For both thread and distributed parallelization, VPs simplify handling of
-neuron  and synapses distributions.
+neuron and synapses distributions.
 Virtual processes are distributed round-robin (i.e. each VP is allocated equal
 time slices, without any given a priority) onto the MPI processes and
 counted continuously over all processes.
@@ -74,7 +74,7 @@ in a scenario with two processes with two threads each.
  sg=spike_generator, iaf=iaf_psc_alpha, sr=spike_recorder. Numbers to
  the left and right indicate node IDs.
  The *proxy* object in the figure is a conceptual way of keeping the id of the
- real node free on remote processes).
+ real node free on remote processes.
 
 
 .. note::
@@ -161,7 +161,7 @@ Spikes between neurons and devices
 Synaptic plasticity models
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For synapse models supporting plasticity, synapse dynamics in the
+For synapse models supporting :hxt_ref:`plasticity`, synapse dynamics in the
 ``Connection`` object are always handled by the virtual process of the
 `target node`.
 
@@ -188,17 +188,27 @@ command for this is
 Usually, a good choice for `T` is the number of processor cores available
 on your machine.
 
-.. note::
+In some situations, `oversubscribing` (i.e., to specify a
+``local_num_threads`` that is higher than available cores on your
+machine) can yield 20–30% improvement in simulation speed. Finding the
+optimal thread number for a specific situation might require a bit of
+experimenting.
 
- In some situations, `oversubscribing` (i.e., to specify a ``local_num_threads`` that is higher than available cores on your machine)
- can yield 20-30% improvement in simulation speed. Finding the optimal thread number for a
- specific situation might require a bit of experimenting.
+.. admonition:: NEST ignores OMP_NUM_THREADS
+
+   NEST ignores ``OMP_NUM_THREADS`` environment
+   variable, which may be set by mpi4py, Slurm or similar runtime
+   environments. NEST will always start running on a single thread
+   until the number of threads is changed by setting either the
+   ``local_num_threads`` or the ``total_num_virtual_procs``
+   :ref:`kernel attribute<sec_kernel_attributes>`.
+
 
 Multiprocessing
 ---------------
 
 
-NEST internally parallelizes network construction [1]_ and maintains internal data structures in this process. For
+NEST internally parallelizes network construction :footcite:p:`Ippen2017` and maintains internal data structures in this process. For
 example, running several :py:func:`.Connect` calls simultaneously can interfere with the internal parallelization and will
 likely lead to unpredictable/wrong results.
 
@@ -365,5 +375,4 @@ independently of the details of parallelization.
 References
 ----------
 
-.. [1] Ippen T, Eppler JM, Plesser HE and Diesmann M (2017). Constructing neuronal network models in massively
-       parallel environments. Front. Neuroinform. 11:30. DOI: 10.3389/fninf.2017.00030
+.. footbibliography::

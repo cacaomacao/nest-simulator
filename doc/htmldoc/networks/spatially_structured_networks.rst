@@ -3,21 +3,15 @@
 Spatially-structured networks
 =============================
 
-NEST provides  a convenient interface for creating neurons placed in
-space and connecting those neurons with probabilities and
-properties depending on the relative placement of neurons. This permits
-the creation of complex networks with spatial structure.
+NEST provides a convenient interface for creating neurons placed in
+space and connecting those neurons with probabilities and properties
+depending on the relative placement of neurons. This permits the
+creation of complex networks with spatial structure.
 
-This user manual provides an introduction to the functionalities provided for
-defining spatial networks in NEST. It is based exclusively on the PyNEST, the
-Python interface to NEST. NEST users using the SLI
-interface should be able to map instructions to corresponding SLI code.
-This manual is not meant as a comprehensive reference manual. Please
-consult the online documentation in PyNEST for details; where
-appropriate, that documentation also points to relevant SLI
-documentation.
-
-This manual describes the spatial functionalities included with NEST 3.0.
+This user manual provides an introduction to the functionalities for
+defining spatial networks in NEST. This manual is not meant as a
+comprehensive reference manual. Please consult the online
+documentation in PyNEST for details.
 
 In the next sections of this manual, we introduce the commands and
 concepts required to work with spatially distributed nodes. In
@@ -469,14 +463,16 @@ Pool
    +--------------------------------+--------------+--------------+
    | Connection parameters          | Driver       | Pool         |
    +================================+==============+==============+
-   | ``rule='pairwise_bernoulli'``  | source layer | target layer |
+   | ``rule='fixed_indegree'``      | target layer | source layer |
    +--------------------------------+--------------+--------------+
    | ``rule='fixed_outdegree'``     | source layer | target layer |
+   +--------------------------------+--------------+--------------+
+   | ``rule='pairwise_bernoulli'``  | source layer | target layer |
    +--------------------------------+--------------+--------------+
    | ``rule='pairwise_bernoulli'``  | target layer | source layer |
    | and ``use_on_source=True``     |              |              |
    +--------------------------------+--------------+--------------+
-   | ``rule='fixed_indegree'``      | target layer | source layer |
+   | ``rule='pairwise_poisson'``    | source layer | target layer |
    +--------------------------------+--------------+--------------+
 
 Displacement
@@ -499,6 +495,13 @@ Connection probability or ``p``
    probability for creating a connection between a driver and a pool node.
    The default probability is :math:`1`, i.e., connections are created with
    certainty. See section :ref:`sec_conn_kernels` for details.
+
+Pairwise average number of connections or ``pairwise_avg_num_conns``
+   The *pairwise average number of connections* between a driver and a pool node.
+   It is used in the ``pairwise_poisson`` connection rule and determines
+   the mean value of the Poisson distribution from which the number of
+   connections between the nodes is sampled. See section
+   :ref:`sec_conn_kernels` for details.
 
 Autapse
    An *autapse* is a synapse (connection) from a node onto itself.
@@ -832,10 +835,14 @@ Probabilistic connection rules
 
 Many neuronal network models employ probabilistic connection rules.
 NEST supports probabilistic connections through the
-``pairwise_bernoulli`` connection rule. The probability can then be a constant,
-depend on the position of the source or the target neuron, or on the
-distance between a driver and a pool node to a connection probability. To
-create dependencies on neuron positions, NEST parameters objects are used.
+``pairwise_bernoulli`` and the ``pairwise_poisson`` connection rule.
+For the ``pairwise_bernoulli`` rule, the probability can then be a
+constant, depend on the position of the source or the target neuron,
+or on the distance between a driver and a pool node to a connection probability.
+For the ``pairwise_poisson`` rule, the pairwise average number of connections
+can depend on the position of the source or the target neuron,
+or on the distance between a driver and a pool node to a connection probability.
+To create dependencies on neuron positions, NEST :py:class:`.Parameter` objects are used.
 NEST then generates a connection according to this probability.
 
 Probabilistic connections between layers can be generated in two different
@@ -848,6 +855,15 @@ Free probabilistic connections using ``pairwise_bernoulli``
    resulting probability. This means in particular that *each possible
    driver-pool pair is inspected exactly once* and that there will be *at
    most one connection between each driver-pool pair*.
+
+Free probabilistic connections using ``pairwise_poisson``
+   In this case, :py:func:`.Connect` considers each driver node :math:`D` in turn.
+   For each :math:`D`, it evaluates the parameter value for each pool node
+   :math:`P` within the mask and creates a number of connections that are sampled
+   from a Poisson distribution with mean of the parameter value. This means in
+   particular that *each possible driver-pool pair is inspected exactly once*
+   and that *more than one connection between each driver-pool pair is possible*.
+   Additionally, the parameter may be larger than :math:`1`.
 
 Prescribed number of connections
    can be obtained by using ``fixed_indegree`` or ``fixed_outdegree``
@@ -914,6 +930,16 @@ parameters drawing values from random distributions.
   |                                              | | rho              |    {2(1-\rho^2)}}                                    |
   |                                              |                    |                                                      |
   +----------------------------------------------+--------------------+------------------------------------------------------+
+  |                                              |                    | .. math::                                            |
+  |                                              | | x,               |                                                      |
+  |                                              | | y,               |    p(x) = \big[\cos(360^{\circ}                      |
+  |                                              | | theta,           |    \frac{y^{\prime}}{\lambda}                        |
+  | ``nest.spatial_distributions.gabor()``       | | gamma,           |    + \psi)\big]^{+} e^{-\frac{                       |
+  |                                              | | std,             |    \gamma^{2}x^{\prime 2}+y^{\prime 2}}{             |
+  |                                              | | lam,             |    2\text{std}^{2}}}                                 |
+  |                                              | | psi              |    \\ x^{\prime} = x\cos\theta + y\sin\theta         |
+  |                                              |                    |    \\ y^{\prime} = -x\sin\theta + y\cos\theta        |
+  +----------------------------------------------+--------------------+------------------------------------------------------+
   |                                              |                    | .. math:: p(x) = \frac{x^{\kappa-1}e^{-\frac{x}      |
   | ``nest.spatial_distributions.gamma()``       | | x,               |     {\theta}}}{\theta^\kappa\Gamma(\kappa)}          |
   |                                              | | kappa            |                                                      |
@@ -976,13 +1002,22 @@ Cut-off Gaussian
     :end-before: # { end #}
 
 2D Gaussian
-   We conclude with an example using a two-dimensional Gaussian
-   distribution, i.e., a Gaussian with different widths in :math:`x`- and
-   :math:`y`- directions. This probability depends on displacement, not
-   only on distance:
+   Here we use a two-dimensional Gaussian distribution, i.e., a Gaussian with
+   different widths in :math:`x`- and :math:`y`- directions. This probability
+   depends on displacement, not only on distance:
 
 .. literalinclude:: scripts/connections.py
     :start-after: # { conn42d #}
+    :end-before: # { end #}
+
+Rectified Gabor Function
+   We conclude with an example of a rectified Gabor distribution, i.e., a
+   two-dimensional Gaussian distribution modulated with a spatial oscillation
+   perpendicular to :math:`\theta`. This probability depends on the
+   displacement along the coordinates axes, not the distance:
+
+.. literalinclude:: scripts/connections.py
+    :start-after: # { conn4gab #}
     :end-before: # { end #}
 
 Note that for pool layers with periodic boundary conditions, NEST
@@ -1298,7 +1333,7 @@ The following table presents some query functions provided by NEST.
 +---------------------------------+-----------------------------------------------------+
 | ``nest.GetConnections()``       | Retrieve connections (all or for a given            |
 |                                 | source or target); see also                         |
-|                                 | http://www.nest-simulator.org/connection_management.|
+|                                 | :ref:`connectivity_concepts`.                       |
 +---------------------------------+-----------------------------------------------------+
 | ``nest.GetNodes()``             | Returns a NodeCollection of all elements with given |
 |                                 | properties.                                         |
@@ -1484,12 +1519,12 @@ The ``Mask`` class has a few methods that must be overridden:
    class EllipticMask : public nest::Mask< 2 >
    {
    public:
-     EllipticMask( const DictionaryDatum& d )
+     EllipticMask( const Dictionary& d )
        : rx_( 1.0 )
        , ry_( 1.0 )
      {
-       updateValue< double >( d, "r_x", rx_ );
-       updateValue< double >( d, "r_y", ry_ );
+       d.update_value( "r_x", rx_ );
+       d.update_value( "r_y", ry_ );
      }
 
      using Mask< 2 >::inside;

@@ -57,17 +57,23 @@ spike creation rather than that of their arrival.
 
 ::
 
-   >>> neurons = nest.Create('iaf_psc_alpha', 5)
-   >>> sr = nest.Create('spike_recorder')
+   >>> neurons = nest.Create("iaf_psc_alpha", 5)
+   >>> sr  = nest.Create("spike_recorder", params={"record_to":"memory", "time_in_steps": False})
    >>> nest.Connect(neurons, sr)
 
-The call to ``Connect`` will fail if the connection direction is
+Note the call to ``Connect`` will fail if the connection direction is
 reversed (i.e., connecting *sr* to *neurons*).
+
 
 .. include:: ../models/recording_device.rst
 
 See also
 ++++++++
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: spike_recorder
 
 EndUserDocs */
 
@@ -77,6 +83,8 @@ namespace nest
 /**
  * Class spike_recorder
  */
+
+void register_spike_recorder( const std::string& name );
 
 class spike_recorder : public RecordingDevice
 {
@@ -97,7 +105,7 @@ public:
     return true;
   }
 
-  Name
+  std::string
   get_element_type() const override
   {
     return names::recorder;
@@ -114,21 +122,21 @@ public:
 
   void handle( SpikeEvent& ) override;
 
-  port handles_test_event( SpikeEvent&, rport ) override;
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
 
   Type get_type() const override;
   SignalType receives_signal() const override;
 
-  void get_status( DictionaryDatum& ) const override;
-  void set_status( const DictionaryDatum& ) override;
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
   void pre_run_hook() override;
   void update( Time const&, const long, const long ) override;
 };
 
-inline port
-spike_recorder::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+spike_recorder::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -143,6 +151,6 @@ spike_recorder::receives_signal() const
   return ALL;
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef SPIKE_RECORDER_H */

@@ -32,14 +32,11 @@
 #include "connector_model.h"
 #include "event.h"
 
-// Includes from sli:
-#include "dictdatum.h"
-#include "dictutils.h"
 
 namespace nest
 {
 
-/* BeginUserDocs: synapse, spike-timing-dependent plasticity
+/* BeginUserDocs: synapse, stdp
 
 Short description
 +++++++++++++++++
@@ -72,7 +69,8 @@ and
    F_-(t) &= \exp((t - t_j^(k))/\tau_-)
 
 This makes it possible to implement update rules which approximate the
-rule stated in [1]_, and for examples, the rules given in [2]_ and [3]_.
+rule stated in :footcite:p:`Nessler2013`, and for examples, the rules given in :footcite:p:`Legenstein2016` and
+:footcite:p:`Jonke2017`.
 
 .. warning::
 
@@ -105,19 +103,22 @@ SpikeEvent
 References
 ++++++++++
 
-.. [1] Nessler, Bernhard, et al. "Bayesian computation emerges in generic
-       cortical microcircuits through spike-timing-dependent plasticity." PLoS
-       computational biology 9.4 (2013): e1003037.
-.. [2] Legenstein, Robert, et al. "Assembly pointers for variable binding in
-       networks of spiking neurons." arXiv preprint arXiv:1611.03698 (2016).
-.. [3] Jonke, Zeno, et al. "Feedback inhibition shapes emergent computational
-       properties of cortical microcircuit motifs." arXiv preprint
-       arXiv:1705.07614 (2017).
+Note that the original citation for Mueller et al. 2020 referred to the preprint v1 on ArXiv:
+`Legenstein, Papadimitriou, Vempala and Maass. 2016. Assembly pointers for variable binding in networks of
+spiking neuron. ArXiv.`
+
+
+.. footbibliography::
 
 See also
 ++++++++
 
 synapsedict, stdp_synapse
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: jonke_synapse
 
 EndUserDocs */
 
@@ -138,12 +139,12 @@ public:
   /**
    * Get all properties and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties from the values given in dictionary.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   double alpha_;
   double beta_;
@@ -154,49 +155,10 @@ public:
   double Wmax_;
 };
 
-JonkeCommonProperties::JonkeCommonProperties()
-  : CommonSynapseProperties()
-  , alpha_( 1.0 )
-  , beta_( 0.0 )
-  , lambda_( 0.01 )
-  , mu_plus_( 0.0 )
-  , mu_minus_( 0.0 )
-  , tau_plus_( 20.0 )
-  , Wmax_( 100.0 )
-{
-}
-
-void
-JonkeCommonProperties::get_status( DictionaryDatum& d ) const
-{
-  CommonSynapseProperties::get_status( d );
-
-  def< double >( d, names::alpha, alpha_ );
-  def< double >( d, names::beta, beta_ );
-  def< double >( d, names::lambda, lambda_ );
-  def< double >( d, names::mu_plus, mu_plus_ );
-  def< double >( d, names::mu_minus, mu_minus_ );
-  def< double >( d, names::tau_plus, tau_plus_ );
-  def< double >( d, names::Wmax, Wmax_ );
-}
-
-void
-JonkeCommonProperties::set_status( const DictionaryDatum& d, ConnectorModel& cm )
-{
-  CommonSynapseProperties::set_status( d, cm );
-
-  updateValue< double >( d, names::alpha, alpha_ );
-  updateValue< double >( d, names::beta, beta_ );
-  updateValue< double >( d, names::lambda, lambda_ );
-  updateValue< double >( d, names::tau_plus, tau_plus_ );
-  updateValue< double >( d, names::mu_plus, mu_plus_ );
-  updateValue< double >( d, names::mu_minus, mu_minus_ );
-  updateValue< double >( d, names::Wmax, Wmax_ );
-}
-
-
 // connections are templates of target identifier type (used for pointer /
 // target index addressing) derived from generic connection template
+void register_jonke_synapse( const std::string& name );
+
 template < typename targetidentifierT >
 class jonke_synapse : public Connection< targetidentifierT >
 {
@@ -235,26 +197,19 @@ public:
   /**
    * Get all properties of this connection and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties of this connection from the values given in dictionary.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
-
-  /**
-   * Checks to see if illegal parameters are given in syn_spec.
-   *
-   * The illegal parameters are:  "alpha", "beta", "lambda", "mu_plus", "mu_minus", "tau_plus", "Wmax"
-   */
-  void check_synapse_params( const DictionaryDatum& d ) const;
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   /**
    * Send an event to the receiver of this connection.
    * \param e The event to send
    * \param cp common properties of all synapses (empty).
    */
-  void send( Event& e, thread t, const JonkeCommonProperties& cp );
+  bool send( Event& e, size_t t, const JonkeCommonProperties& cp );
 
 
   class ConnTestDummyNode : public ConnTestDummyNodeBase
@@ -263,15 +218,15 @@ public:
     // Ensure proper overriding of overloaded virtual functions.
     // Return values from functions are ignored.
     using ConnTestDummyNodeBase::handles_test_event;
-    port
-    handles_test_event( SpikeEvent&, rport ) override
+    size_t
+    handles_test_event( SpikeEvent&, size_t ) override
     {
       return invalid_port;
     }
   };
 
   void
-  check_connection( Node& s, Node& t, rport receptor_type, const CommonPropertiesType& )
+  check_connection( Node& s, Node& t, size_t receptor_type, const CommonPropertiesType& )
   {
     ConnTestDummyNode dummy_target;
 
@@ -337,8 +292,8 @@ constexpr ConnectionModelProperties jonke_synapse< targetidentifierT >::properti
  * \param cp Common properties object, containing the stdp parameters.
  */
 template < typename targetidentifierT >
-inline void
-jonke_synapse< targetidentifierT >::send( Event& e, thread t, const JonkeCommonProperties& cp )
+inline bool
+jonke_synapse< targetidentifierT >::send( Event& e, size_t t, const JonkeCommonProperties& cp )
 {
   // synapse STDP depressing/facilitation dynamics
   const double t_spike = e.get_stamp().get_ms();
@@ -387,6 +342,8 @@ jonke_synapse< targetidentifierT >::send( Event& e, thread t, const JonkeCommonP
   Kplus_ = Kplus_ * std::exp( ( t_lastspike_ - t_spike ) / cp.tau_plus_ ) + 1.0;
 
   t_lastspike_ = t_spike;
+
+  return true;
 }
 
 
@@ -401,46 +358,29 @@ jonke_synapse< targetidentifierT >::jonke_synapse()
 
 template < typename targetidentifierT >
 void
-jonke_synapse< targetidentifierT >::get_status( DictionaryDatum& d ) const
+jonke_synapse< targetidentifierT >::get_status( Dictionary& d ) const
 {
   ConnectionBase::get_status( d );
-  def< double >( d, names::weight, weight_ );
-  def< double >( d, names::Kplus, Kplus_ );
-  def< long >( d, names::size_of, sizeof( *this ) );
+  d[ names::weight ] = weight_;
+  d[ names::Kplus ] = Kplus_;
+  d[ names::size_of ] = static_cast< long >( sizeof( *this ) );
 }
 
 template < typename targetidentifierT >
 void
-jonke_synapse< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& cm )
+jonke_synapse< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& cm )
 {
   ConnectionBase::set_status( d, cm );
-  updateValue< double >( d, names::weight, weight_ );
-  updateValue< double >( d, names::Kplus, Kplus_ );
 
+  d.update_value( names::weight, weight_ );
+
+  d.update_value( names::Kplus, Kplus_ );
   if ( Kplus_ < 0 )
   {
     throw BadProperty( "Kplus must be non-negative." );
   }
 }
 
-template < typename targetidentifierT >
-void
-jonke_synapse< targetidentifierT >::check_synapse_params( const DictionaryDatum& syn_spec ) const
-{
-  std::string param_arr[] = { "alpha", "beta", "lambda", "mu_plus", "mu_minus", "tau_plus", "Wmax" };
+}  // of namespace nest
 
-  const size_t n_param = sizeof( param_arr ) / sizeof( std::string );
-  for ( size_t n = 0; n < n_param; ++n )
-  {
-    if ( syn_spec->known( param_arr[ n ] ) )
-    {
-      std::string msg = "Connect doesn't support the setting of parameter " + param_arr[ n ]
-        + " in jonke_synapse. Use SetDefaults() or CopyModel().";
-      throw NotImplemented( msg );
-    }
-  }
-}
-
-} // of namespace nest
-
-#endif // of #ifndef JONKE_SYNAPSE_H
+#endif  // of #ifndef JONKE_SYNAPSE_H

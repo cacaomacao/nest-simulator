@@ -35,18 +35,16 @@ asynchronous to the synchronous state, while for a gap weight of 0.7 nS a
 stable synchronous state is reached.
 
 This example is also used as test case 2 (see Figure 9 and 10)
-in [1]_.
+in :footcite:p:`Hahne2015`.
 
 References
 ~~~~~~~~~~
 
-.. [1] Hahne et al. (2015) A unified framework for spiking and gap-junction
-       interactions in distributed neuronal network simulations, Front.
-       Neuroinform. http://dx.doi.org/10.3389/neuro.11.012.2008
+.. footbibliography::
 """
 
-import nest
 import matplotlib.pyplot as plt
+import nest
 import numpy
 
 n_neuron = 500
@@ -143,11 +141,11 @@ times = events["times"]
 spikes = events["senders"]
 n_spikes = sr.n_events
 
-hz_rate = (1000.0 * n_spikes / simtime) / n_neuron
+spike_rate = (1000.0 * n_spikes / simtime) / n_neuron
 
 plt.figure(1)
 plt.plot(times, spikes, "o")
-plt.title(f"Average spike rate (Hz): {hz_rate:.2f}")
+plt.title(f"Average spike rate: {spike_rate:.2f} spks/s")
 plt.xlabel("time (ms)")
 plt.ylabel("neuron no")
 plt.show()

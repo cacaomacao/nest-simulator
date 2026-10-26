@@ -29,13 +29,15 @@
 #include "vp_manager_impl.h"
 
 
-nest::SparseNodeArray::NodeEntry::NodeEntry( Node& node, index node_id )
+namespace nest
+{
+SparseNodeArray::NodeEntry::NodeEntry( Node& node, size_t node_id )
   : node_( &node )
   , node_id_( node_id )
 {
 }
 
-nest::SparseNodeArray::SparseNodeArray()
+SparseNodeArray::SparseNodeArray()
   : nodes_()
   , global_max_node_id_( 0 )
   , local_min_node_id_( 0 )
@@ -45,13 +47,13 @@ nest::SparseNodeArray::SparseNodeArray()
   , split_node_id_( 0 )
   , split_idx_( 0 )
   , have_split_( false )
-  , left_side_has_proxies_( false ) // meaningless initial value
+  , left_side_has_proxies_( false )  // meaningless initial value
 {
 }
 
 
 void
-nest::SparseNodeArray::clear()
+SparseNodeArray::clear()
 {
   nodes_.clear();
 
@@ -67,9 +69,9 @@ nest::SparseNodeArray::clear()
 }
 
 void
-nest::SparseNodeArray::add_local_node( Node& node )
+SparseNodeArray::add_local_node( Node& node )
 {
-  const index node_id = node.get_node_id();
+  const size_t node_id = node.get_node_id();
 
   // ensure increasing order
   assert( node_id > local_max_node_id_ );
@@ -107,15 +109,15 @@ nest::SparseNodeArray::add_local_node( Node& node )
     }
     else
     {
-      ++split_idx_; // index one beyond the node
+      ++split_idx_;  // index one beyond the node
     }
   }
 }
 
 void
-nest::SparseNodeArray::set_max_node_id( index node_id )
+SparseNodeArray::set_max_node_id( size_t node_id )
 {
-  assert( node_id > 0 ); // minimum node ID is 1
+  assert( node_id > 0 );  // minimum node ID is 1
   assert( node_id >= local_max_node_id_ );
   global_max_node_id_ = node_id;
   if ( not have_split_ )
@@ -124,8 +126,8 @@ nest::SparseNodeArray::set_max_node_id( index node_id )
   }
 }
 
-nest::Node*
-nest::SparseNodeArray::get_node_by_node_id( index node_id ) const
+Node*
+SparseNodeArray::get_node_by_node_id( size_t node_id ) const
 {
   assert( is_consistent_() );
 
@@ -140,15 +142,13 @@ nest::SparseNodeArray::get_node_by_node_id( index node_id ) const
     return nullptr;
   }
 
-  /* Find base index and node ID for estimating location of desired node in array.
-   *
-   * In the expression for base_id, split_node_id_ will only be used if we are on the
-   * right side, when the value is well-defined.
-   */
+  // Find base index and node ID for estimating location of desired node in array.
+  // In the expression for base_id, split_node_id_ will only be used if we are on the
+  // right side, when the value is well-defined.
   const bool left_side = node_id < split_node_id_;
   const double scale = left_side ? left_scale_ : right_scale_;
   const size_t base_idx = left_side ? 0 : split_idx_;
-  const index base_id = left_side ? local_min_node_id_ : split_node_id_;
+  const size_t base_id = left_side ? local_min_node_id_ : split_node_id_;
 
   // estimate index, limit to array size for safety size
   auto idx =
@@ -175,3 +175,5 @@ nest::SparseNodeArray::get_node_by_node_id( index node_id ) const
     return nullptr;
   }
 }
+
+}  // namespace nest

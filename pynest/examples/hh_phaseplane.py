@@ -42,7 +42,6 @@ import nest
 import numpy as np
 from matplotlib import pyplot as plt
 
-
 amplitude = 100.0  # Set externally applied current amplitude in pA
 dt = 0.1  # simulation step length [ms]
 
@@ -60,7 +59,7 @@ num_v_steps = len(V_vec)
 num_n_steps = len(n_vec)
 
 nest.ResetKernel()
-nest.set_verbosity("M_ERROR")
+nest.verbosity = nest.VerbosityLevel.ERROR
 nest.resolution = dt
 
 neuron = nest.Create("hh_psc_alpha")

@@ -29,8 +29,8 @@ The output shows the voltage in each of the three compartments.
 :Authors: WAM Wybo
 """
 
-import nest
 import matplotlib.pyplot as plt
+import nest
 
 nest.ResetKernel()
 
@@ -41,12 +41,14 @@ soma_params = {
     "g_C": 0.0,  # soma has no parent
     "g_L": 1.0,  # [nS] Leak conductance
     "e_L": -70.0,  # [mV] leak reversal
+    "v_comp": -70.0,  # [mV] voltage initialization
 }
 dend_params = {
     "C_m": 0.1,  # [pF] Capacitance
     "g_C": 0.1,  # [nS] Coupling conductance to parent (soma here)
     "g_L": 0.1,  # [nS] Leak conductance
     "e_L": -70.0,  # [mV] leak reversal
+    "v_comp": -70.0,  # [mV] voltage initialization
 }
 
 ###############################################################################
@@ -60,7 +62,7 @@ cm.compartments = [
 
 ###############################################################################
 # spike threshold
-nest.SetStatus(cm, {"V_th": -50.0})
+cm.V_th = -50.0
 
 ###############################################################################
 # - GABA receptor in compartment 0 (soma)
@@ -81,11 +83,11 @@ syn_idx_GABA, syn_idx_AMPA, syn_idx_NMDA = 0, 1, 2
 
 ###############################################################################
 # create three spike generators
-sg1 = nest.Create("spike_generator", 1, {"spike_times": [101.0, 105.0, 106.0, 110.0, 150.0]})
+sg1 = nest.Create("spike_generator", params={"spike_times": [101.0, 105.0, 106.0, 110.0, 150.0]})
 sg2 = nest.Create(
-    "spike_generator", 1, {"spike_times": [115.0, 155.0, 160.0, 162.0, 170.0, 254.0, 260.0, 272.0, 278.0]}
+    "spike_generator", params={"spike_times": [115.0, 155.0, 160.0, 162.0, 170.0, 254.0, 260.0, 272.0, 278.0]}
 )
-sg3 = nest.Create("spike_generator", 1, {"spike_times": [250.0, 255.0, 260.0, 262.0, 270.0]})
+sg3 = nest.Create("spike_generator", params={"spike_times": [250.0, 255.0, 260.0, 262.0, 270.0]})
 
 ###############################################################################
 # connect the spike generators to the receptors
@@ -101,16 +103,16 @@ nest.Connect(
 
 ###############################################################################
 # create and connect a current generator to compartment 1
-dcg = nest.Create("dc_generator", {"amplitude": 1.0})
+dcg = nest.Create("dc_generator", params={"amplitude": 1.0})
 nest.Connect(dcg, cm, syn_spec={"synapse_model": "static_synapse", "weight": 1.0, "delay": 0.1, "receptor_type": 1})
 
 ###############################################################################
 # create and connect a multimeter to measure the three compartmental voltages
-mm = nest.Create("multimeter", 1, {"record_from": ["v_comp0", "v_comp1", "v_comp2"], "interval": 0.1})
+mm = nest.Create("multimeter", params={"record_from": ["v_comp0", "v_comp1", "v_comp2"], "interval": 0.1})
 nest.Connect(mm, cm)
 
 nest.Simulate(400.0)
-res = nest.GetStatus(mm, "events")[0]
+res = mm.events
 
 plt.plot(res["times"], res["v_comp0"], c="b", label="v_comp0")
 plt.plot(res["times"], res["v_comp1"], c="r", label="v_comp1")

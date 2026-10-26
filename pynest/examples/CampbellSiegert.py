@@ -36,10 +36,7 @@ simulation using the ``iaf_psc_alpha`` model
 References
 ~~~~~~~~~~
 
- .. [1] Papoulis A (1991). Probability, Random Variables, and
-        Stochastic Processes, McGraw-Hill
- .. [2] Siegert AJ (1951). On the first passage time probability problem,
-        Phys Rev 81: 617-623
+ .. footbibliography::
 
 Authors
 ~~~~~~~
@@ -51,12 +48,10 @@ S. Schrader, Siegert implementation by T. Tetzlaff
 # First, we import all necessary modules for simulation and analysis. Scipy
 # should be imported before nest.
 
-from scipy.special import erf
-from scipy.optimize import fmin
-
-import numpy as np
-
 import nest
+import numpy as np
+from scipy.optimize import fmin
+from scipy.special import erf
 
 ###############################################################################
 # We first set the parameters of neurons, noise and the simulation. First
@@ -98,7 +93,7 @@ assert len(weights) == len(rates)
 
 ###############################################################################
 # In the following we analytically compute the firing rate of the neuron
-# based on Campbell's theorem [1]_ and Siegerts approximation [2]_.
+# based on Campbell's theorem :footcite:p:`Papoulis1991` and Siegerts approximation :footcite:p:`Siegert1951`.
 
 for rate, weight in zip(rates, weights):
     if weight > 0:
@@ -166,7 +161,7 @@ r = 1.0 / (t_ref * ms + tau_m * ms * tmpsum)
 
 nest.ResetKernel()
 
-nest.set_verbosity("M_WARNING")
+nest.verbosity = nest.VerbosityLevel.WARNING
 neurondict = {
     "V_th": V_th,
     "tau_m": tau_m,
